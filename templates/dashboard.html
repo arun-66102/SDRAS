@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+
+{% block content %}
+<!-- ─── KPI STATS ────────────────────────────────────────────────────── -->
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-header">
+            <span class="stat-label">Total Disasters</span>
+            <div class="stat-icon"><i data-lucide="alert-triangle" style="color:var(--accent-blue)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ stats.total_disasters }}">0</div>
+        <div class="stat-change">Active incidents tracked</div>
+    </div>
+
+    <div class="stat-card rose">
+        <div class="stat-header">
+            <span class="stat-label">Critical (Sev ≥ 8)</span>
+            <div class="stat-icon"><i data-lucide="bell" style="color:var(--accent-rose)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ stats.critical_count }}">0</div>
+        <div class="stat-change">Require immediate response</div>
+    </div>
+
+    <div class="stat-card emerald">
+        <div class="stat-header">
+            <span class="stat-label">Warehouses Active</span>
+            <div class="stat-icon"><i data-lucide="warehouse" style="color:var(--accent-emerald)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ stats.total_warehouses }}">0</div>
+        <div class="stat-change">NDRF regional depots</div>
+    </div>
+
+    <div class="stat-card amber">
+        <div class="stat-header">
+            <span class="stat-label">People Affected</span>
+            <div class="stat-icon"><i data-lucide="users" style="color:var(--accent-amber)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ stats.total_population }}">0</div>
+        <div class="stat-change">Across all disasters</div>
+    </div>
+
+    <div class="stat-card purple">
+        <div class="stat-header">
+            <span class="stat-label">Allocations Made</span>
+            <div class="stat-icon"><i data-lucide="package" style="color:var(--accent-purple)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ stats.total_allocations }}">0</div>
+        <div class="stat-change">Resource dispatches</div>
+    </div>
+
+    <div class="stat-card cyan">
+        <div class="stat-header">
+            <span class="stat-label">ML Models</span>
+            <div class="stat-icon"><i data-lucide="cpu" style="color:var(--accent-cyan)"></i></div>
+        </div>
+        <div class="stat-value">3</div>
+        <div class="stat-change">XGBoost · RF · LR</div>
+    </div>
+</div>
+
+<!-- ─── MAP & CHARTS ────────────────────────────────────────────────── -->
+<div class="grid-2">
+    <!-- Disaster Hotspot Map -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i data-lucide="map" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Disaster Hotspot Map</h3>
+            <span class="badge badge-blue">Live</span>
+        </div>
+        <div class="card-body" style="padding: 0;">
+            <div class="map-container">
+                <div id="disaster-map"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Disaster Type Distribution -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i data-lucide="bar-chart-2" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Disaster Type Distribution</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="disaster-type-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="grid-2">
+    <!-- Resource Demand -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i data-lucide="package" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Predicted vs. Allocated Resources</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="resource-demand-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Severity Distribution -->
+    <div class="card">
+        <div class="card-header">
+            <h3><i data-lucide="target" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Severity Distribution</h3>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="severity-chart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── RECENT DISASTERS TABLE ──────────────────────────────────────── -->
+<div class="card">
+    <div class="card-header">
+        <h3><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Recent Disasters</h3>
+        {% if current_user.role in ['admin', 'officer'] %}
+        <a href="{{ url_for('disaster_form') }}" class="btn btn-primary btn-sm">+ Report New</a>
+        {% endif %}
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-container">
+            <table class="data-table" id="disasters-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>District</th>
+                        <th>Population</th>
+                        <th>Food Req.</th>
+                        <th>Medical Req.</th>
+                        <th>Shelter Req.</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for d in recent_disasters %}
+                    <tr>
+                        <td class="fw-600">#{{ d.id }}</td>
+                        <td>
+                            <span class="badge {% if d.disaster_type == 'Flood' %}badge-blue{% elif d.disaster_type == 'Cyclone' %}badge-purple{% elif d.disaster_type == 'Earthquake' %}badge-amber{% elif d.disaster_type == 'Fire' %}badge-rose{% elif d.disaster_type == 'Tsunami' %}badge-cyan{% else %}badge-emerald{% endif %}">
+                                {{ d.disaster_type }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="fw-700 {% if d.severity >= 8 %}text-rose{% elif d.severity >= 5 %}text-amber{% else %}text-emerald{% endif %}">
+                                {{ d.severity }}/10
+                            </span>
+                        </td>
+                        <td>{{ d.district }}, {{ d.state }}</td>
+                        <td>{{ "{:,}".format(d.population_affected) }}</td>
+                        <td>{{ "{:,}".format(d.food_required) }}</td>
+                        <td>{{ "{:,}".format(d.medical_required) }}</td>
+                        <td>{{ "{:,}".format(d.shelter_required) }}</td>
+                        <td>
+                            <span class="badge {% if d.status == 'Active' %}badge-rose{% elif d.status == 'Allocated' %}badge-emerald{% elif d.status == 'Resolved' %}badge-blue{% else %}badge-amber{% endif %}">
+                                {{ d.status }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if d.status == 'Allocated' or d.allocations %}
+                            <span class="text-muted" style="font-size:0.85rem;font-weight:500">Already Allocated</span>
+                            {% else %}
+                            {% if current_user.role in ['admin', 'officer'] %}
+                            <button class="btn btn-success btn-sm" data-id="{{ d.id }}" onclick="allocateResources(parseInt(this.dataset.id))">
+                                Allocate
+                            </button>
+                            {% else %}
+                            <span class="text-muted" style="font-size:0.85rem;font-weight:500">Pending</span>
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script id="disasters-data" type="application/json">{{ disasters_json | safe }}</script>
+<script id="warehouses-data" type="application/json">{{ warehouses_json | safe }}</script>
+<script id="chart-data-json" type="application/json">{{ chart_data | safe }}</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+    // Initialise map
+    const disasters = JSON.parse(document.getElementById('disasters-data').textContent);
+    const warehouses = JSON.parse(document.getElementById('warehouses-data').textContent);
+    initDisasterMap(disasters, warehouses);
+
+    // Initialise charts
+    const chartData = JSON.parse(document.getElementById('chart-data-json').textContent);
+    renderDashboardCharts(chartData);
+</script>
+{% endblock %}

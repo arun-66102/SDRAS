@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Decision Support{% endblock %}
+{% block page_title %}<i data-lucide="file-text" style="width:18px;height:18px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Decision Support System{% endblock %}
+
+{% block content %}
+<!-- ─── EMERGENCY ALERTS ────────────────────────────────────────────── -->
+{% if alerts %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i data-lucide="alert-triangle" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Active Emergency Alerts</h3>
+        <span class="badge badge-rose pulse">{{ alerts|length }} Active</span>
+    </div>
+    <div class="card-body">
+        {% for alert in alerts %}
+        <div class="alert-card {% if alert.level == 'CRITICAL' %}critical{% elif alert.level == 'WARNING' %}warning{% else %}info{% endif %}">
+            <div class="alert-title">{{ alert.title }}</div>
+            <div class="alert-message">{{ alert.message }}</div>
+            {% if alert.actions %}
+            <div style="margin-top:0.75rem">
+                <div style="font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:0.35rem">Required Actions:</div>
+                {% for action in alert.actions %}
+                <div style="font-size:0.75rem;color:var(--text-secondary);padding:0.15rem 0;padding-left:1rem;position:relative">
+                    <span style="position:absolute;left:0;color:var(--accent-blue)">›</span> {{ action }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ─── RECOMMENDATIONS ─────────────────────────────────────────────── -->
+{% if recommendations %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i data-lucide="lightbulb" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Resource Recommendations</h3>
+    </div>
+    <div class="card-body">
+        {% for rec in recommendations %}
+        <div class="recommendation-card">
+            <div class="rec-icon"><i data-lucide="{{ rec.icon }}" style="width:20px;height:20px"></i></div>
+            <div class="rec-content">
+                <h4>{{ rec.message }}</h4>
+                <p>{{ rec.action }}</p>
+                <div class="rec-priority {{ rec.priority }}">{{ rec.priority | upper }} PRIORITY</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ─── RELIEF PLAN ─────────────────────────────────────────────────── -->
+{% if relief_plan %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i data-lucide="calendar" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Phased Relief Plan</h3>
+        {% if active_disaster %}
+        <span class="badge badge-blue">{{ active_disaster.disaster_type }} — {{ active_disaster.district }}</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="timeline">
+            {% for phase in relief_plan %}
+            <div class="timeline-item {% if loop.index == 2 %}phase-2{% elif loop.index == 3 %}phase-3{% endif %}">
+                <div class="timeline-content">
+                    <h4>{{ phase.phase }}</h4>
+                    <div class="duration"><i data-lucide="clock" style="width:12px;height:12px;vertical-align:middle;margin-right:0.15rem;display:inline-block"></i> {{ phase.duration }}</div>
+
+                    <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.35rem">Objectives:</div>
+                    <ul>
+                        {% for obj in phase.objectives %}
+                        <li>{{ obj }}</li>
+                        {% endfor %}
+                    </ul>
+
+                    <div style="margin-top:0.75rem;display:flex;gap:1rem;flex-wrap:wrap">
+                        <div style="font-size:0.7rem;padding:0.35rem 0.65rem;background:rgba(59,130,246,0.1);border-radius:4px;color:var(--accent-blue);display:flex;align-items:center;gap:0.25rem">
+                            <i data-lucide="package" style="width:12px;height:12px"></i> Food: {{ "{:,}".format(phase.resources.food) }}
+                        </div>
+                        <div style="font-size:0.7rem;padding:0.35rem 0.65rem;background:rgba(244,63,94,0.1);border-radius:4px;color:var(--accent-rose);display:flex;align-items:center;gap:0.25rem">
+                            <i data-lucide="heart" style="width:12px;height:12px"></i> Medical: {{ "{:,}".format(phase.resources.medical) }}
+                        </div>
+                        <div style="font-size:0.7rem;padding:0.35rem 0.65rem;background:rgba(16,185,129,0.1);border-radius:4px;color:var(--accent-emerald);display:flex;align-items:center;gap:0.25rem">
+                            <i data-lucide="home" style="width:12px;height:12px"></i> Shelter: {{ "{:,}".format(phase.resources.shelter) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ─── NO DATA STATE ───────────────────────────────────────────────── -->
+{% if not alerts and not recommendations and not relief_plan %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <div class="empty-icon"><i data-lucide="file-text" style="width:48px;height:48px;color:var(--text-muted)"></i></div>
+            <h3>No Active Incidents</h3>
+            <p>Decision support data will appear when disasters are reported and resources are allocated.
+               Report a new disaster to generate alerts, recommendations, and relief plans.</p>
+            <a href="{{ url_for('disaster_form') }}" class="btn btn-primary" style="margin-top:1rem">
+                <i data-lucide="alert-triangle" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Report Disaster
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Report Disaster{% endblock %}
+{% block page_title %}<i data-lucide="alert-triangle" style="width:18px;height:18px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Report New Disaster{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+    <!-- ─── DISASTER INPUT FORM ──────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Disaster Information Input</h3>
+            <span class="badge badge-blue">Module ②</span>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('disaster_form') }}" id="disaster-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="disaster_type">Disaster Type</label>
+                        <select id="disaster_type" name="disaster_type" class="form-control" required>
+                            <option value="">Select type...</option>
+                            {% for dt in disaster_types %}
+                            <option value="{{ dt }}">{{ dt }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="severity">Severity (1-10)</label>
+                        <input type="number" id="severity" name="severity" class="form-control"
+                               min="1" max="10" placeholder="1 = Low, 10 = Critical" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="district">District</label>
+                        <select id="district" name="district" class="form-control" required onchange="onDistrictChange(this)">
+                            <option value="">Select district...</option>
+                            {% for d in districts %}
+                            <option value="{{ d.district }}" data-state="{{ d.state }}"
+                                    data-lat="{{ d.lat }}" data-lon="{{ d.lon }}">
+                                {{ d.district }}, {{ d.state }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="state">State</label>
+                        <input type="text" id="state" name="state" class="form-control"
+                               placeholder="Auto-filled from district" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="population_affected">Population Affected</label>
+                        <input type="number" id="population_affected" name="population_affected"
+                               class="form-control" min="1" placeholder="Number of people affected" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="rainfall_mm">Rainfall (mm)</label>
+                        <input type="number" id="rainfall_mm" name="rainfall_mm" class="form-control"
+                               min="0" max="1000" step="0.01" placeholder="0 - 1000 mm" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="temperature_c">Temperature (°C)</label>
+                        <input type="number" id="temperature_c" name="temperature_c" class="form-control"
+                               min="0" max="50" step="0.1" placeholder="10 - 45 °C" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="disaster_duration_days">Duration (Days)</label>
+                        <input type="number" id="disaster_duration_days" name="disaster_duration_days"
+                               class="form-control" min="1" max="365" placeholder="Expected duration" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="latitude">Latitude</label>
+                        <input type="number" id="latitude" name="latitude" class="form-control"
+                               step="0.0001" placeholder="Auto-filled" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="longitude">Longitude</label>
+                        <input type="number" id="longitude" name="longitude" class="form-control"
+                               step="0.0001" placeholder="Auto-filled" readonly>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i data-lucide="sparkles" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Submit & Predict Resources
+                    </button>
+                    <button type="reset" class="btn btn-outline">Clear Form</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ─── GUIDELINES ───────────────────────────────────────────────── -->
+    <div>
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Severity Scale Guide</h3>
+            </div>
+            <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                    <div class="alert-card success" style="margin:0;padding:0.75rem 1rem">
+                        <div class="alert-title" style="font-size:0.8rem">1-3: Low Severity</div>
+                        <div class="alert-message" style="font-size:0.75rem">Minor impact, local response sufficient. Limited displacement expected.</div>
+                    </div>
+                    <div class="alert-card info" style="margin:0;padding:0.75rem 1rem">
+                        <div class="alert-title" style="font-size:0.8rem">4-5: Moderate</div>
+                        <div class="alert-message" style="font-size:0.75rem">District-level coordination needed. Moderate resource deployment.</div>
+                    </div>
+                    <div class="alert-card warning" style="margin:0;padding:0.75rem 1rem">
+                        <div class="alert-title" style="font-size:0.8rem">6-7: High Severity</div>
+                        <div class="alert-message" style="font-size:0.75rem">State-level response activated. Significant resource needs.</div>
+                    </div>
+                    <div class="alert-card critical" style="margin:0;padding:0.75rem 1rem">
+                        <div class="alert-title" style="font-size:0.8rem">8-10: Critical</div>
+                        <div class="alert-message" style="font-size:0.75rem">National emergency. All NDRF battalions deployed. Maximum priority.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3><i data-lucide="cpu" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> ML Models Used</h3>
+            </div>
+            <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:var(--bg-secondary);border-radius:var(--radius-sm)">
+                        <div style="width:10px;height:10px;border-radius:50%;background:#3b82f6;flex-shrink:0"></div>
+                        <div>
+                            <div style="font-size:0.8rem;font-weight:700">XGBoost Regressor</div>
+                            <div style="font-size:0.7rem;color:var(--text-muted)">Gradient Boosting — Primary Model</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:var(--bg-secondary);border-radius:var(--radius-sm)">
+                        <div style="width:10px;height:10px;border-radius:50%;background:#10b981;flex-shrink:0"></div>
+                        <div>
+                            <div style="font-size:0.8rem;font-weight:700">Random Forest</div>
+                            <div style="font-size:0.7rem;color:var(--text-muted)">Ensemble Trees — Robust Performance</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;background:var(--bg-secondary);border-radius:var(--radius-sm)">
+                        <div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;flex-shrink:0"></div>
+                        <div>
+                            <div style="font-size:0.8rem;font-weight:700">Linear Regression</div>
+                            <div style="font-size:0.7rem;color:var(--text-muted)">Baseline Model — Interpretable</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

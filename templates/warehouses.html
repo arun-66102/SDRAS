@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Warehouses{% endblock %}
+{% block page_title %}<i data-lucide="warehouse" style="width:18px;height:18px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Warehouse Inventory{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock %}
+
+{% block content %}
+<!-- ─── WAREHOUSE STATS ─────────────────────────────────────────────── -->
+<div class="stats-grid">
+    <div class="stat-card blue">
+        <div class="stat-header">
+            <span class="stat-label">Total Warehouses</span>
+            <div class="stat-icon"><i data-lucide="warehouse" style="color:var(--accent-blue)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ warehouses|length }}">0</div>
+        <div class="stat-change">NDRF Regional Depots</div>
+    </div>
+    <div class="stat-card emerald">
+        <div class="stat-header">
+            <span class="stat-label">Total Food Stock</span>
+            <div class="stat-icon"><i data-lucide="package" style="color:var(--accent-emerald)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ total_food }}">0</div>
+    </div>
+    <div class="stat-card rose">
+        <div class="stat-header">
+            <span class="stat-label">Total Medical Stock</span>
+            <div class="stat-icon"><i data-lucide="heart" style="color:var(--accent-rose)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ total_medical }}">0</div>
+    </div>
+    <div class="stat-card amber">
+        <div class="stat-header">
+            <span class="stat-label">Total Shelter Stock</span>
+            <div class="stat-icon"><i data-lucide="home" style="color:var(--accent-amber)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ total_shelter }}">0</div>
+    </div>
+</div>
+
+<!-- ─── WAREHOUSE MAP ───────────────────────────────────────────────── -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i data-lucide="map" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Warehouse Locations</h3>
+    </div>
+    <div class="card-body" style="padding:0">
+        <div class="map-container">
+            <div id="disaster-map"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── WAREHOUSE CARDS GRID ────────────────────────────────────────── -->
+<div class="grid-3">
+    {% for wh in warehouses %}
+    <div class="warehouse-card">
+        <div class="wh-header">
+            <div class="wh-icon"><i data-lucide="warehouse" style="width:20px;height:20px;color:var(--text-secondary)"></i></div>
+            <div>
+                <div class="wh-name">{{ wh.warehouse_id }}</div>
+                <div class="wh-location">{{ wh.district }}, {{ wh.state }}</div>
+            </div>
+        </div>
+        <div class="stock-bars">
+            <div class="stock-bar food">
+                <div class="stock-label">
+                    <span>Food Stock</span>
+                    <span>{{ "{:,}".format(wh.food_stock) }}</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill" data-width="{{ [(wh.food_stock / 5000) * 100, 100]|min }}"></div>
+                </div>
+            </div>
+            <div class="stock-bar medical">
+                <div class="stock-label">
+                    <span>Medical Stock</span>
+                    <span>{{ "{:,}".format(wh.medical_stock) }}</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill" data-width="{{ [(wh.medical_stock / 1000) * 100, 100]|min }}"></div>
+                </div>
+            </div>
+            <div class="stock-bar shelter">
+                <div class="stock-label">
+                    <span>Shelter Stock</span>
+                    <span>{{ "{:,}".format(wh.shelter_stock) }}</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill" data-width="{{ [(wh.shelter_stock / 500) * 100, 100]|min }}"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script id="warehouses-data" type="application/json">{{ warehouses_json | safe }}</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const warehouses = JSON.parse(document.getElementById('warehouses-data').textContent);
+    initDisasterMap([], warehouses);
+
+    // Apply stock bar progress widths
+    document.querySelectorAll('.bar-fill').forEach(el => {
+        const widthVal = el.getAttribute('data-width');
+        if (widthVal) {
+            el.style.width = widthVal + '%';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Login — Smart Disaster Resource Allocation System">
+    <title>Login | SDRAS</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="login-page">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-logo">
+                    <div class="logo-icon">
+                        <i data-lucide="shield" style="color:white;width:28px;height:28px"></i>
+                    </div>
+                    <h1>SDRAS</h1>
+                    <p>Smart Disaster Resource Allocation System</p>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="flash-message {{ category }}" style="margin-bottom: 1.25rem;">
+                    {% if category == 'error' %}✕{% else %}ℹ{% endif %} {{ message }}
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('login') }}" id="login-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" class="form-control"
+                               placeholder="Enter your username" required autofocus>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" class="form-control"
+                               placeholder="Enter your password" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-full btn-lg" id="login-btn"
+                            style="margin-top: 0.5rem;">
+                        <i data-lucide="lock" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Sign In
+                    </button>
+                </form>
+
+                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                    <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-bottom: 0.75rem;">
+                        Demo Credentials
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;">
+                        <button class="btn btn-outline btn-sm" onclick="fillLogin('admin','admin123')" style="font-size:0.7rem">
+                            <i data-lucide="crown" style="width:12px;height:12px;vertical-align:middle;margin-right:0.15rem;display:inline-block"></i> Admin
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="fillLogin('officer','officer123')" style="font-size:0.7rem">
+                            <i data-lucide="award" style="width:12px;height:12px;vertical-align:middle;margin-right:0.15rem;display:inline-block"></i> Officer
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="fillLogin('ngo','ngo123')" style="font-size:0.7rem">
+                            <i data-lucide="users" style="width:12px;height:12px;vertical-align:middle;margin-right:0.15rem;display:inline-block"></i> NGO
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function fillLogin(username, password) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+        }
+        
+        // Initialise icons
+        document.addEventListener("DOMContentLoaded", function() {
+            lucide.createIcons();
+        });
+    </script>
+</body>
+</html>
