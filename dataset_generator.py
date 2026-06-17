@@ -5,8 +5,10 @@ Synthetic Dataset Generator
 Generates realistic training data for XGBoost, Random Forest, and Linear Regression models.
 
 Author  : Arunkumar K R
-Version : 1.0.0
+Version : 2.0.0
 Seed    : 42
+
+Resources: food, medical, water, clothing (shelter replaced with water + clothing)
 """
 
 import numpy as np
@@ -25,49 +27,17 @@ OUTPUT_CSV  = "smart_disaster_dataset.csv"
 WAREHOUSE_CSV = "warehouse_dataset.csv"
 
 np.random.seed(SEED)
+from config import Config
+
 fake = Faker("en_IN")
 Faker.seed(SEED)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. DISTRICT MASTER TABLE  (25+ Indian districts with coordinates)
+# 1. DISTRICT MASTER TABLE  (all Indian states and districts from Config)
 # ─────────────────────────────────────────────────────────────────────────────
 DISTRICTS = [
-    # (district_name, state, lat, lon)
-    ("Mumbai",          "Maharashtra",       19.0760,  72.8777),
-    ("Chennai",         "Tamil Nadu",        13.0827,  80.2707),
-    ("Kolkata",         "West Bengal",       22.5726,  88.3639),
-    ("Delhi",           "Delhi",             28.7041,  77.1025),
-    ("Bangalore",       "Karnataka",         12.9716,  77.5946),
-    ("Hyderabad",       "Telangana",         17.3850,  78.4867),
-    ("Ahmedabad",       "Gujarat",           23.0225,  72.5714),
-    ("Pune",            "Maharashtra",       18.5204,  73.8567),
-    ("Jaipur",          "Rajasthan",         26.9124,  75.7873),
-    ("Lucknow",         "Uttar Pradesh",     26.8467,  80.9462),
-    ("Bhopal",          "Madhya Pradesh",    23.2599,  77.4126),
-    ("Patna",           "Bihar",             25.5941,  85.1376),
-    ("Bhubaneswar",     "Odisha",            20.2961,  85.8245),
-    ("Guwahati",        "Assam",             26.1445,  91.7362),
-    ("Thiruvananthapuram","Kerala",           8.5241,  76.9366),
-    ("Chandigarh",      "Punjab",            30.7333,  76.7794),
-    ("Dehradun",        "Uttarakhand",       30.3165,  78.0322),
-    ("Shimla",          "Himachal Pradesh",  31.1048,  77.1734),
-    ("Gangtok",         "Sikkim",            27.3389,  88.6065),
-    ("Imphal",          "Manipur",           24.8170,  93.9368),
-    ("Aizawl",          "Mizoram",           23.7307,  92.7173),
-    ("Itanagar",        "Arunachal Pradesh", 27.0844,  93.6053),
-    ("Kohima",          "Nagaland",          25.6701,  94.1077),
-    ("Port Blair",      "Andaman & Nicobar",  11.6234,  92.7265),
-    ("Panaji",          "Goa",               15.4909,  73.8278),
-    ("Raipur",          "Chhattisgarh",      21.2514,  81.6296),
-    ("Ranchi",          "Jharkhand",         23.3441,  85.3096),
-    ("Agartala",        "Tripura",           23.8315,  91.2868),
-    ("Srinagar",        "Jammu & Kashmir",   34.0837,  74.7973),
-    ("Leh",             "Ladakh",            34.1526,  77.5771),
-    ("Visakhapatnam",   "Andhra Pradesh",    17.6868,  83.2185),
-    ("Coimbatore",      "Tamil Nadu",        11.0168,  76.9558),
-    ("Surat",           "Gujarat",           21.1702,  72.8311),
-    ("Nagpur",          "Maharashtra",       21.1458,  79.0882),
-    ("Indore",          "Madhya Pradesh",    22.7196,  75.8577),
+    (d["district"], d["state"], d["lat"], d["lon"])
+    for d in Config.DISTRICTS
 ]
 
 district_df = pd.DataFrame(DISTRICTS, columns=["district", "state", "latitude", "longitude"])
@@ -78,14 +48,14 @@ district_df = pd.DataFrame(DISTRICTS, columns=["district", "state", "latitude", 
 DISASTER_TYPES = ["Flood", "Cyclone", "Earthquake", "Fire", "Landslide", "Tsunami"]
 
 # Multipliers for resource formulas per disaster type
-#   food_mult | medical_mult | shelter_mult
+#   food_mult | medical_mult | water_mult | clothing_mult
 DISASTER_MULTIPLIERS = {
-    "Flood":      (1.3,  1.1,  1.2),
-    "Cyclone":    (1.2,  1.2,  1.3),
-    "Earthquake": (1.1,  1.2,  1.6),
-    "Fire":       (0.9,  1.8,  1.0),
-    "Landslide":  (1.0,  1.2,  1.3),
-    "Tsunami":    (1.4,  1.3,  1.5),
+    "Flood":      (1.3,  1.1,  1.8,  1.2),
+    "Cyclone":    (1.2,  1.2,  1.5,  1.4),
+    "Earthquake": (1.1,  1.2,  1.3,  1.6),
+    "Fire":       (0.9,  1.8,  1.0,  0.8),
+    "Landslide":  (1.0,  1.2,  1.2,  1.3),
+    "Tsunami":    (1.4,  1.3,  1.9,  1.5),
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -124,7 +94,8 @@ print("[2/5] Computing target variables using domain formulas ...")
 # Pre-compute per-row multipliers from disaster type
 fm = np.array([DISASTER_MULTIPLIERS[d][0] for d in disaster_type])  # food
 mm = np.array([DISASTER_MULTIPLIERS[d][1] for d in disaster_type])  # medical
-sm = np.array([DISASTER_MULTIPLIERS[d][2] for d in disaster_type])  # shelter
+wm = np.array([DISASTER_MULTIPLIERS[d][2] for d in disaster_type])  # water
+cm = np.array([DISASTER_MULTIPLIERS[d][3] for d in disaster_type])  # clothing
 
 # Rainfall influence (normalised 0-1); relevant mainly for Flood/Cyclone/Tsunami
 rain_norm = rainfall_mm / 1000.0
@@ -156,17 +127,30 @@ medical_base = (
 noise_med = np.random.normal(1.0, 0.10, size=N_ROWS)    # ±10% noise
 medical_required = np.maximum(0, medical_base * noise_med).astype(int)
 
-# ── 4c. shelter_required ────────────────────────────────────────────────────
-# Earthquakes/Tsunamis destroy structures → very high shelter need.
-# Longer duration → more temporary shelters needed.
-shelter_base = (
-    population_affected * 0.30             # 30% base displacement rate
-    * (1 + 0.12 * severity)               # severity increases displacement
-    * sm                                   # disaster-type multiplier
-    * (1 + 0.05 * disaster_duration_days) # longer disaster → more shelters
+# ── 4c. water_required ──────────────────────────────────────────────────────
+# Clean water is critical after disasters — contamination increases need.
+# Floods/Tsunamis contaminate local water supply → very high water need.
+water_base = (
+    population_affected * 0.35             # 35% base need rate (litres per person)
+    * (1 + 0.18 * severity)               # severity increases contamination
+    * (1 + 0.15 * rain_norm)              # heavy rain → more contamination
+    * wm                                   # disaster-type multiplier
+    * (1 + 0.04 * disaster_duration_days) # longer disaster → more water needed
 )
-noise_shelter = np.random.normal(1.0, 0.09, size=N_ROWS) # ±9% noise
-shelter_required = np.maximum(0, shelter_base * noise_shelter).astype(int)
+noise_water = np.random.normal(1.0, 0.09, size=N_ROWS)  # ±9% noise
+water_required = np.maximum(0, water_base * noise_water).astype(int)
+
+# ── 4d. clothing_required ───────────────────────────────────────────────────
+# Displaced populations need clothing — earthquakes destroy homes,
+# cyclones/tsunamis cause displacement.
+clothing_base = (
+    population_affected * 0.20             # 20% base displacement needs clothing
+    * (1 + 0.10 * severity)               # severity increases displacement
+    * cm                                   # disaster-type multiplier
+    * (1 + 0.03 * disaster_duration_days) # longer disaster → more clothing needed
+)
+noise_clothing = np.random.normal(1.0, 0.10, size=N_ROWS)  # ±10% noise
+clothing_required = np.maximum(0, clothing_base * noise_clothing).astype(int)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. ASSEMBLE DATAFRAME
@@ -187,7 +171,8 @@ df = pd.DataFrame({
     # Targets
     "food_required"         : food_required,
     "medical_required"      : medical_required,
-    "shelter_required"      : shelter_required,
+    "water_required"        : water_required,
+    "clothing_required"     : clothing_required,
 })
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -204,7 +189,7 @@ neg_check = (df[numeric_cols] < 0).sum().sum()
 assert neg_check == 0, f"ERROR: {neg_check} negative values detected!"
 
 # 6c. Target columns must be integers
-for col in ["food_required", "medical_required", "shelter_required"]:
+for col in ["food_required", "medical_required", "water_required", "clothing_required"]:
     assert df[col].dtype in [np.int32, np.int64, int], f"ERROR: {col} is not integer!"
 
 # 6d. Severity within range
@@ -237,10 +222,10 @@ wh_lat_jitter = np.random.uniform(-0.15, 0.15, size=N_WAREHOUSES)
 wh_lon_jitter = np.random.uniform(-0.15, 0.15, size=N_WAREHOUSES)
 
 # Stock levels: realistic government/NGO strategic reserves
-# Base stock scaled to district population proxy + random spread
-food_stock    = np.random.randint(50_000,  500_001, size=N_WAREHOUSES)  # food packets
-medical_stock = np.random.randint(5_000,   100_001, size=N_WAREHOUSES)  # medical kits
-shelter_stock = np.random.randint(1_000,    50_001, size=N_WAREHOUSES)  # shelter units
+food_stock     = np.random.randint(50_000,  500_001, size=N_WAREHOUSES)  # food packets
+medical_stock  = np.random.randint(5_000,   100_001, size=N_WAREHOUSES)  # medical kits
+water_stock    = np.random.randint(10_000,  300_001, size=N_WAREHOUSES)  # water units (litres)
+clothing_stock = np.random.randint(2_000,    80_001, size=N_WAREHOUSES)  # clothing sets
 
 warehouse_names = [
     f"NDRF Regional Depot — {row['district']}"
@@ -256,7 +241,8 @@ warehouse_df = pd.DataFrame({
     "longitude"      : np.round(wh_districts["longitude"].values + wh_lon_jitter, 4),
     "food_stock"     : food_stock,
     "medical_stock"  : medical_stock,
-    "shelter_stock"  : shelter_stock,
+    "water_stock"    : water_stock,
+    "clothing_stock" : clothing_stock,
 })
 
 warehouse_df.to_csv(WAREHOUSE_CSV, index=False)
@@ -298,7 +284,7 @@ print(warehouse_df.head(10).to_string(index=False))
 print(f"\n{SEP}")
 print("  TARGET VARIABLE RANGES")
 print(SEP)
-for col in ["food_required", "medical_required", "shelter_required"]:
+for col in ["food_required", "medical_required", "water_required", "clothing_required"]:
     print(f"  {col:<22}: min={df[col].min():>10,}  max={df[col].max():>12,}  mean={df[col].mean():>12,.0f}")
 
 print(f"\n{'─'*60}")

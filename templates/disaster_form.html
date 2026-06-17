@@ -15,7 +15,7 @@
                 <div class="form-grid">
                     <div class="form-group">
                         <label for="disaster_type">Disaster Type</label>
-                        <select id="disaster_type" name="disaster_type" class="form-control" required>
+                        <select id="disaster_type" name="disaster_type" class="form-control" required onchange="onDisasterTypeChange(this)">
                             <option value="">Select type...</option>
                             {% for dt in disaster_types %}
                             <option value="{{ dt }}">{{ dt }}</option>
@@ -27,6 +27,22 @@
                         <label for="severity">Severity (1-10)</label>
                         <input type="number" id="severity" name="severity" class="form-control"
                                min="1" max="10" placeholder="1 = Low, 10 = Critical" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="state">State</label>
+                        <select id="state" name="state" class="form-control" required onchange="onStateChange(this)">
+                            <option value="">Select state...</option>
+                            {% set states = [] %}
+                            {% for d in districts %}
+                                {% if d.state not in states %}
+                                    {% set _ = states.append(d.state) %}
+                                {% endif %}
+                            {% endfor %}
+                            {% for s in states|sort %}
+                            <option value="{{ s }}">{{ s }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -43,21 +59,20 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="state">State</label>
-                        <input type="text" id="state" name="state" class="form-control"
-                               placeholder="Auto-filled from district" readonly>
-                    </div>
-
-                    <div class="form-group">
                         <label for="population_affected">Population Affected</label>
                         <input type="number" id="population_affected" name="population_affected"
                                class="form-control" min="1" placeholder="Number of people affected" required>
                     </div>
 
-                    <div class="form-group">
-                        <label for="rainfall_mm">Rainfall (mm)</label>
+                    <!-- Rainfall field — conditionally required based on disaster type -->
+                    <div class="form-group" id="rainfall-group">
+                        <label for="rainfall_mm" id="rainfall-label">
+                            Rainfall (mm)
+                            <span id="rainfall-badge" class="badge badge-amber" style="font-size:0.65rem;margin-left:0.35rem;display:none">Required</span>
+                            <span id="rainfall-optional" class="text-muted" style="font-size:0.7rem;margin-left:0.35rem;display:none">(Optional)</span>
+                        </label>
                         <input type="number" id="rainfall_mm" name="rainfall_mm" class="form-control"
-                               min="0" max="1000" step="0.01" placeholder="0 - 1000 mm" required>
+                               min="0" max="1000" step="0.01" placeholder="0 - 1000 mm">
                     </div>
 
                     <div class="form-group">
@@ -123,6 +138,21 @@
             </div>
         </div>
 
+        <!-- Rainfall Info Card -->
+        <div class="card mb-3" id="rainfall-info-card" style="display:none">
+            <div class="card-header">
+                <h3><i data-lucide="cloud-rain" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Rainfall Information</h3>
+            </div>
+            <div class="card-body">
+                <div class="alert-card info" style="margin:0;padding:0.75rem 1rem">
+                    <div class="alert-title" style="font-size:0.8rem">Weather-Related Disaster</div>
+                    <div class="alert-message" style="font-size:0.75rem" id="rainfall-info-text">
+                        Rainfall data is <strong>required</strong> for this disaster type as it directly impacts resource predictions.
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h3><i data-lucide="cpu" style="width:16px;height:16px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> ML Models Used</h3>
@@ -155,4 +185,50 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Rainfall required disasters list from server
+    const RAINFALL_REQUIRED = JSON.parse('{{ rainfall_required_disasters | safe }}');
+
+    function onDisasterTypeChange(selectEl) {
+        const dtype = selectEl.value;
+        const rainfallInput = document.getElementById('rainfall_mm');
+        const rainfallBadge = document.getElementById('rainfall-badge');
+        const rainfallOptional = document.getElementById('rainfall-optional');
+        const rainfallGroup = document.getElementById('rainfall-group');
+        const rainfallInfoCard = document.getElementById('rainfall-info-card');
+        const rainfallInfoText = document.getElementById('rainfall-info-text');
+
+        if (RAINFALL_REQUIRED.includes(dtype)) {
+            // Rainfall is REQUIRED for this disaster type
+            rainfallInput.required = true;
+            rainfallInput.placeholder = '0 - 1000 mm (Required)';
+            rainfallBadge.style.display = 'inline-block';
+            rainfallOptional.style.display = 'none';
+            rainfallGroup.classList.add('rainfall-required');
+            rainfallGroup.classList.remove('rainfall-optional');
+            rainfallInfoCard.style.display = 'block';
+            rainfallInfoText.innerHTML = 'Rainfall data is <strong>required</strong> for <strong>' + dtype + '</strong> as it directly impacts resource predictions for water supply and food spoilage.';
+        } else if (dtype) {
+            // Rainfall is OPTIONAL for this disaster type
+            rainfallInput.required = false;
+            rainfallInput.placeholder = '0 - 1000 mm (Optional)';
+            rainfallBadge.style.display = 'none';
+            rainfallOptional.style.display = 'inline';
+            rainfallGroup.classList.remove('rainfall-required');
+            rainfallGroup.classList.add('rainfall-optional');
+            rainfallInfoCard.style.display = 'block';
+            rainfallInfoText.innerHTML = 'Rainfall data is <strong>optional</strong> for <strong>' + dtype + '</strong>. Enter 0 or leave blank if not applicable.';
+        } else {
+            // No disaster type selected yet
+            rainfallInput.required = false;
+            rainfallBadge.style.display = 'none';
+            rainfallOptional.style.display = 'none';
+            rainfallGroup.classList.remove('rainfall-required', 'rainfall-optional');
+            rainfallInfoCard.style.display = 'none';
+        }
+    }
+</script>
 {% endblock %}

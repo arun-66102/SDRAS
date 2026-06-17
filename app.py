@@ -161,12 +161,14 @@ def dashboard():
         "resource_totals": {
             "food": sum(d.food_required for d in disasters if d.status == "Active"),
             "medical": sum(d.medical_required for d in disasters if d.status == "Active"),
-            "shelter": sum(d.shelter_required for d in disasters if d.status == "Active"),
+            "water": sum(d.water_required for d in disasters if d.status == "Active"),
+            "clothing": sum(d.clothing_required for d in disasters if d.status == "Active"),
         },
         "resource_allocated": {
             "food": sum(a.food_allocated for a in allocations),
             "medical": sum(a.medical_allocated for a in allocations),
-            "shelter": sum(a.shelter_allocated for a in allocations),
+            "water": sum(a.water_allocated for a in allocations),
+            "clothing": sum(a.clothing_allocated for a in allocations),
         },
         "severity_distribution": {
             "labels": sorted(severity_counts.keys()),
@@ -203,7 +205,8 @@ def dashboard():
                 "longitude": w.longitude,
                 "food_stock": w.food_stock,
                 "medical_stock": w.medical_stock,
-                "shelter_stock": w.shelter_stock,
+                "water_stock": w.water_stock,
+                "clothing_stock": w.clothing_stock,
             }
             for w in warehouses
         ]
@@ -234,13 +237,19 @@ def disaster_form():
             disaster_type = request.form["disaster_type"]
             severity = int(request.form["severity"])
             population_affected = int(request.form["population_affected"])
-            rainfall_mm = float(request.form["rainfall_mm"])
             temperature_c = float(request.form["temperature_c"])
             duration = int(request.form["disaster_duration_days"])
             district = request.form["district"]
             state = request.form["state"]
             latitude = float(request.form["latitude"])
             longitude = float(request.form["longitude"])
+
+            # Rainfall: required only for weather-related disasters
+            if disaster_type in Config.RAINFALL_REQUIRED_DISASTERS:
+                rainfall_mm = float(request.form["rainfall_mm"])
+            else:
+                rainfall_raw = request.form.get("rainfall_mm", "").strip()
+                rainfall_mm = float(rainfall_raw) if rainfall_raw else 0.0
 
             # Run ML prediction
             engine = get_ml_engine()
@@ -267,7 +276,8 @@ def disaster_form():
                 longitude=longitude,
                 food_required=best_preds["food_required"],
                 medical_required=best_preds["medical_required"],
-                shelter_required=best_preds["shelter_required"],
+                water_required=best_preds["water_required"],
+                clothing_required=best_preds["clothing_required"],
                 status="Active",
                 created_by=current_user.id,
             )
@@ -278,7 +288,8 @@ def disaster_form():
                 f"Disaster #{disaster.id} reported! Predicted — "
                 f"Food: {best_preds['food_required']:,}, "
                 f"Medical: {best_preds['medical_required']:,}, "
-                f"Shelter: {best_preds['shelter_required']:,}",
+                f"Water: {best_preds['water_required']:,}, "
+                f"Clothing: {best_preds['clothing_required']:,}",
                 "success",
             )
             return redirect(url_for("dashboard"))
@@ -292,6 +303,7 @@ def disaster_form():
         active_page="disaster_form",
         disaster_types=Config.DISASTER_TYPES,
         districts=Config.DISTRICTS,
+        rainfall_required_disasters=json.dumps(Config.RAINFALL_REQUIRED_DISASTERS),
     )
 
 
@@ -326,7 +338,7 @@ def api_predict():
             disaster_type=data["disaster_type"],
             severity=int(data["severity"]),
             population_affected=int(data["population_affected"]),
-            rainfall_mm=float(data["rainfall_mm"]),
+            rainfall_mm=float(data.get("rainfall_mm", 0)),
             temperature_c=float(data["temperature_c"]),
             disaster_duration_days=int(data["disaster_duration_days"]),
         )
@@ -403,7 +415,13 @@ def api_allocate():
                 "longitude": w.longitude,
                 "food_stock": w.food_stock,
                 "medical_stock": w.medical_stock,
-                "shelter_stock": w.shelter_stock,
+                "water_stock": w.water_stock,
+                "clothing_stock": w.clothing_stock,
+                # Include thresholds for allocation engine
+                "min_food_threshold": w.min_food_threshold,
+                "min_medical_threshold": w.min_medical_threshold,
+                "min_water_threshold": w.min_water_threshold,
+                "min_clothing_threshold": w.min_clothing_threshold,
             }
             for w in warehouses
         ]
@@ -411,7 +429,8 @@ def api_allocate():
         predicted_needs = {
             "food_required": disaster.food_required,
             "medical_required": disaster.medical_required,
-            "shelter_required": disaster.shelter_required,
+            "water_required": disaster.water_required,
+            "clothing_required": disaster.clothing_required,
         }
 
         disaster_dict = {
@@ -432,7 +451,8 @@ def api_allocate():
                 warehouse_pk=alloc["warehouse_pk"],
                 food_allocated=alloc["food_allocated"],
                 medical_allocated=alloc["medical_allocated"],
-                shelter_allocated=alloc["shelter_allocated"],
+                water_allocated=alloc["water_allocated"],
+                clothing_allocated=alloc["clothing_allocated"],
                 distance_km=alloc["distance_km"],
                 status="Allocated",
                 priority=priority,
@@ -444,7 +464,8 @@ def api_allocate():
             if wh:
                 wh.food_stock = max(0, wh.food_stock - alloc["food_allocated"])
                 wh.medical_stock = max(0, wh.medical_stock - alloc["medical_allocated"])
-                wh.shelter_stock = max(0, wh.shelter_stock - alloc["shelter_allocated"])
+                wh.water_stock = max(0, wh.water_stock - alloc["water_allocated"])
+                wh.clothing_stock = max(0, wh.clothing_stock - alloc["clothing_allocated"])
 
         # Update disaster status in database to Allocated
         disaster.status = "Allocated"
@@ -474,7 +495,8 @@ def warehouses_page():
 
     total_food = sum(w.food_stock for w in warehouses)
     total_medical = sum(w.medical_stock for w in warehouses)
-    total_shelter = sum(w.shelter_stock for w in warehouses)
+    total_water = sum(w.water_stock for w in warehouses)
+    total_clothing = sum(w.clothing_stock for w in warehouses)
 
     warehouses_json = json.dumps(
         [
@@ -487,11 +509,14 @@ def warehouses_page():
                 "longitude": w.longitude,
                 "food_stock": w.food_stock,
                 "medical_stock": w.medical_stock,
-                "shelter_stock": w.shelter_stock,
+                "water_stock": w.water_stock,
+                "clothing_stock": w.clothing_stock,
             }
             for w in warehouses
         ]
     )
+
+    districts_json = json.dumps(Config.DISTRICTS)
 
     return render_template(
         "warehouses.html",
@@ -499,9 +524,197 @@ def warehouses_page():
         warehouses=warehouses,
         total_food=total_food,
         total_medical=total_medical,
-        total_shelter=total_shelter,
+        total_water=total_water,
+        total_clothing=total_clothing,
         warehouses_json=warehouses_json,
+        districts_json=districts_json,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API — Update Warehouse Stock (Feature 1: Resource Modification)
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route("/api/warehouse/<int:wh_id>/stock", methods=["PUT"])
+@login_required
+@role_required("admin", "officer")
+def api_update_warehouse_stock(wh_id):
+    """Update stock levels for an existing warehouse."""
+    try:
+        wh = db.session.get(Warehouse, wh_id)
+        if not wh:
+            return jsonify({"error": "Warehouse not found"}), 404
+
+        data = request.get_json()
+
+        # Validate: no negative values
+        for field in ["food_stock", "medical_stock", "water_stock", "clothing_stock"]:
+            if field in data:
+                val = int(data[field])
+                if val < 0:
+                    return jsonify({"error": f"{field} cannot be negative"}), 400
+
+        # Update stock levels
+        if "food_stock" in data:
+            wh.food_stock = int(data["food_stock"])
+        if "medical_stock" in data:
+            wh.medical_stock = int(data["medical_stock"])
+        if "water_stock" in data:
+            wh.water_stock = int(data["water_stock"])
+        if "clothing_stock" in data:
+            wh.clothing_stock = int(data["clothing_stock"])
+
+        db.session.commit()
+
+        return jsonify({
+            "message": f"Stock updated for warehouse {wh.warehouse_id}",
+            "warehouse": {
+                "id": wh.id,
+                "warehouse_id": wh.warehouse_id,
+                "food_stock": wh.food_stock,
+                "medical_stock": wh.medical_stock,
+                "water_stock": wh.water_stock,
+                "clothing_stock": wh.clothing_stock,
+            },
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API — Update Warehouse Thresholds (Feature 4: Minimum Threshold)
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route("/api/warehouse/<int:wh_id>/threshold", methods=["PUT"])
+@login_required
+@role_required("admin")
+def api_update_warehouse_threshold(wh_id):
+    """Set minimum stock thresholds for a warehouse (admin only)."""
+    try:
+        wh = db.session.get(Warehouse, wh_id)
+        if not wh:
+            return jsonify({"error": "Warehouse not found"}), 404
+
+        data = request.get_json()
+
+        # Validate: no negative or zero values for thresholds
+        for field in ["min_food_threshold", "min_medical_threshold",
+                      "min_water_threshold", "min_clothing_threshold"]:
+            if field in data:
+                val = int(data[field])
+                if val <= 0:
+                    return jsonify({"error": f"{field} must be a positive value (> 0)"}), 400
+
+        # Update thresholds
+        if "min_food_threshold" in data:
+            wh.min_food_threshold = int(data["min_food_threshold"])
+        if "min_medical_threshold" in data:
+            wh.min_medical_threshold = int(data["min_medical_threshold"])
+        if "min_water_threshold" in data:
+            wh.min_water_threshold = int(data["min_water_threshold"])
+        if "min_clothing_threshold" in data:
+            wh.min_clothing_threshold = int(data["min_clothing_threshold"])
+
+        db.session.commit()
+
+        return jsonify({
+            "message": f"Thresholds updated for warehouse {wh.warehouse_id}",
+            "warehouse": {
+                "id": wh.id,
+                "warehouse_id": wh.warehouse_id,
+                "min_food_threshold": wh.min_food_threshold,
+                "min_medical_threshold": wh.min_medical_threshold,
+                "min_water_threshold": wh.min_water_threshold,
+                "min_clothing_threshold": wh.min_clothing_threshold,
+            },
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API — Create New Warehouse (Feature 2: Admin Only)
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route("/api/warehouse/new", methods=["POST"])
+@login_required
+@role_required("admin")
+def api_create_warehouse():
+    """Create a new warehouse (admin only)."""
+    try:
+        data = request.get_json()
+
+        # Auto-generate warehouse_id if not provided
+        warehouse_id = data.get("warehouse_id", "").strip()
+        if not warehouse_id:
+            last_wh = Warehouse.query.order_by(Warehouse.id.desc()).first()
+            next_num = (last_wh.id + 1) if last_wh else 1
+            warehouse_id = f"WH{str(next_num).zfill(3)}"
+
+        # Check uniqueness
+        existing = Warehouse.query.filter_by(warehouse_id=warehouse_id).first()
+        if existing:
+            return jsonify({"error": f"Warehouse ID '{warehouse_id}' already exists"}), 400
+
+        # Validate required fields
+        required_fields = ["warehouse_name", "district", "state", "latitude", "longitude"]
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"'{field}' is required"}), 400
+
+        # Validate stock values are non-negative
+        stock_fields = ["food_stock", "medical_stock", "water_stock", "clothing_stock"]
+        for field in stock_fields:
+            val = int(data.get(field, 0))
+            if val < 0:
+                return jsonify({"error": f"{field} cannot be negative"}), 400
+
+        # Validate threshold values are positive (> 0)
+        threshold_fields = {
+            "min_food_threshold": Config.DEFAULT_MIN_THRESHOLD["food"],
+            "min_medical_threshold": Config.DEFAULT_MIN_THRESHOLD["medical"],
+            "min_water_threshold": Config.DEFAULT_MIN_THRESHOLD["water"],
+            "min_clothing_threshold": Config.DEFAULT_MIN_THRESHOLD["clothing"],
+        }
+        for field, default_val in threshold_fields.items():
+            val = int(data.get(field, default_val))
+            if val <= 0:
+                return jsonify({"error": f"{field} must be a positive value (> 0)"}), 400
+
+        wh = Warehouse(
+            warehouse_id=warehouse_id,
+            warehouse_name=data["warehouse_name"],
+            district=data["district"],
+            state=data["state"],
+            latitude=float(data["latitude"]),
+            longitude=float(data["longitude"]),
+            food_stock=int(data.get("food_stock", 0)),
+            medical_stock=int(data.get("medical_stock", 0)),
+            water_stock=int(data.get("water_stock", 0)),
+            clothing_stock=int(data.get("clothing_stock", 0)),
+            min_food_threshold=int(data.get("min_food_threshold", threshold_fields["min_food_threshold"])),
+            min_medical_threshold=int(data.get("min_medical_threshold", threshold_fields["min_medical_threshold"])),
+            min_water_threshold=int(data.get("min_water_threshold", threshold_fields["min_water_threshold"])),
+            min_clothing_threshold=int(data.get("min_clothing_threshold", threshold_fields["min_clothing_threshold"])),
+        )
+        db.session.add(wh)
+        db.session.commit()
+
+        return jsonify({
+            "message": f"Warehouse {warehouse_id} created successfully!",
+            "warehouse": {
+                "id": wh.id,
+                "warehouse_id": wh.warehouse_id,
+                "warehouse_name": wh.warehouse_name,
+                "district": wh.district,
+                "state": wh.state,
+            },
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -541,7 +754,8 @@ def reports_page():
         predicted_needs = {
             "food_required": active_disaster.food_required,
             "medical_required": active_disaster.medical_required,
-            "shelter_required": active_disaster.shelter_required,
+            "water_required": active_disaster.water_required,
+            "clothing_required": active_disaster.clothing_required,
         }
 
         # Get latest allocation for this disaster
@@ -550,7 +764,8 @@ def reports_page():
             "summary": {
                 "food_deficit": 0,
                 "medical_deficit": 0,
-                "shelter_deficit": 0,
+                "water_deficit": 0,
+                "clothing_deficit": 0,
             }
         }
 

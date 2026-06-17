@@ -58,7 +58,8 @@ class Disaster(db.Model):
     # Predicted resource requirements
     food_required = db.Column(db.Integer, default=0)
     medical_required = db.Column(db.Integer, default=0)
-    shelter_required = db.Column(db.Integer, default=0)
+    water_required = db.Column(db.Integer, default=0)
+    clothing_required = db.Column(db.Integer, default=0)
 
     # Metadata
     status = db.Column(db.String(30), default="Active")
@@ -90,7 +91,14 @@ class Warehouse(db.Model):
     # Current stock levels
     food_stock = db.Column(db.Integer, default=0)
     medical_stock = db.Column(db.Integer, default=0)
-    shelter_stock = db.Column(db.Integer, default=0)
+    water_stock = db.Column(db.Integer, default=0)
+    clothing_stock = db.Column(db.Integer, default=0)
+
+    # Minimum thresholds — reserved stock for local emergency supply
+    min_food_threshold = db.Column(db.Integer, default=500)
+    min_medical_threshold = db.Column(db.Integer, default=100)
+    min_water_threshold = db.Column(db.Integer, default=200)
+    min_clothing_threshold = db.Column(db.Integer, default=100)
 
     # Relationships
     allocations = db.relationship("Allocation", backref="warehouse", lazy=True)
@@ -112,7 +120,8 @@ class Allocation(db.Model):
     # Allocated quantities
     food_allocated = db.Column(db.Integer, default=0)
     medical_allocated = db.Column(db.Integer, default=0)
-    shelter_allocated = db.Column(db.Integer, default=0)
+    water_allocated = db.Column(db.Integer, default=0)
+    clothing_allocated = db.Column(db.Integer, default=0)
 
     # Distance from disaster to warehouse (km)
     distance_km = db.Column(db.Float, default=0.0)

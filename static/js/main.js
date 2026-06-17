@@ -29,6 +29,9 @@ function switchTab(tabId) {
     if (content) content.classList.add('active');
 }
 
+// We keep a copy of all district options on page load for dynamic state/district filtering
+let allDistrictOptions = [];
+
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
@@ -39,11 +42,27 @@ document.addEventListener('DOMContentLoaded', function () {
             switchTab(this.dataset.tab);
         });
     });
+
+    const districtSelect = document.getElementById('district');
+    if (districtSelect) {
+        // Clone all options (excluding the empty/first option)
+        allDistrictOptions = Array.from(districtSelect.options)
+            .slice(1)
+            .map(opt => ({
+                value: opt.value,
+                text: opt.textContent.trim(),
+                state: opt.dataset.state,
+                lat: opt.dataset.lat,
+                lon: opt.dataset.lon
+            }));
+    }
 });
 
-// ── District Auto-Fill ─────────────────────────────────────────────────────
+// ── District Auto-Fill & Sync ────────────────────────────────────────────────
 function onDistrictChange(selectEl) {
     const option = selectEl.options[selectEl.selectedIndex];
+    if (!option) return;
+
     const state = option.dataset.state || '';
     const lat = option.dataset.lat || '';
     const lon = option.dataset.lon || '';
@@ -52,9 +71,77 @@ function onDistrictChange(selectEl) {
     const latEl = document.getElementById('latitude');
     const lonEl = document.getElementById('longitude');
 
-    if (stateEl) stateEl.value = state;
     if (latEl) latEl.value = lat;
     if (lonEl) lonEl.value = lon;
+
+    if (stateEl && state) {
+        stateEl.value = state;
+        
+        // Filter district list to only show districts of the selected state
+        const currentDistrict = selectEl.value;
+        selectEl.innerHTML = '<option value="">Select district...</option>';
+        const filtered = allDistrictOptions.filter(opt => opt.state === state);
+        filtered.forEach(opt => {
+            const optEl = document.createElement('option');
+            optEl.value = opt.value;
+            optEl.textContent = opt.text;
+            optEl.dataset.state = opt.state;
+            optEl.dataset.lat = opt.lat;
+            optEl.dataset.lon = opt.lon;
+            selectEl.appendChild(optEl);
+        });
+        selectEl.value = currentDistrict;
+    } else if (stateEl && !state) {
+        // District was cleared
+        const selectedState = stateEl.value;
+        selectEl.innerHTML = '<option value="">Select district...</option>';
+        const filtered = allDistrictOptions.filter(opt => !selectedState || opt.state === selectedState);
+        filtered.forEach(opt => {
+            const optEl = document.createElement('option');
+            optEl.value = opt.value;
+            optEl.textContent = opt.text;
+            optEl.dataset.state = opt.state;
+            optEl.dataset.lat = opt.lat;
+            optEl.dataset.lon = opt.lon;
+            selectEl.appendChild(optEl);
+        });
+        selectEl.value = '';
+    }
+}
+
+// ── State Change filtering ──────────────────────────────────────────────────
+function onStateChange(selectEl) {
+    const selectedState = selectEl.value;
+    const districtSelect = document.getElementById('district');
+    if (!districtSelect) return;
+
+    const currentDistrict = districtSelect.value;
+    
+    // Clear and rebuild options
+    districtSelect.innerHTML = '<option value="">Select district...</option>';
+    
+    const filtered = allDistrictOptions.filter(opt => !selectedState || opt.state === selectedState);
+    filtered.forEach(opt => {
+        const optEl = document.createElement('option');
+        optEl.value = opt.value;
+        optEl.textContent = opt.text;
+        optEl.dataset.state = opt.state;
+        optEl.dataset.lat = opt.lat;
+        optEl.dataset.lon = opt.lon;
+        districtSelect.appendChild(optEl);
+    });
+
+    // Restore previous selection if it's still valid
+    const isStillValid = filtered.some(opt => opt.value === currentDistrict);
+    if (isStillValid) {
+        districtSelect.value = currentDistrict;
+    } else {
+        districtSelect.value = '';
+        const latEl = document.getElementById('latitude');
+        const lonEl = document.getElementById('longitude');
+        if (latEl) latEl.value = '';
+        if (lonEl) lonEl.value = '';
+    }
 }
 
 // ── Number Formatting ──────────────────────────────────────────────────────
@@ -110,6 +197,9 @@ function submitPrediction(event) {
     const formData = new FormData(form);
     const data = Object.fromEntries(formData);
 
+    // Default rainfall to 0 if empty
+    if (!data.rainfall_mm) data.rainfall_mm = 0;
+
     // Show loading
     const resultsDiv = document.getElementById('prediction-results');
     if (resultsDiv) {
@@ -162,7 +252,7 @@ function renderPredictionResults(result) {
         const isBest = modelName === bestModel;
         const mets = metrics[modelName] || {};
         const avgR2 = mets.food_required
-            ? ((mets.food_required.r2 + mets.medical_required.r2 + mets.shelter_required.r2) / 3).toFixed(4)
+            ? ((mets.food_required.r2 + mets.medical_required.r2 + (mets.water_required ? mets.water_required.r2 : 0) + (mets.clothing_required ? mets.clothing_required.r2 : 0)) / 4).toFixed(4)
             : 'N/A';
 
         html += `
@@ -178,8 +268,12 @@ function renderPredictionResults(result) {
                 <div style="font-size:1.4rem;font-weight:700;color:var(--accent-rose)">${formatNumber(preds.medical_required)}</div>
             </div>
             <div style="margin-bottom:0.75rem">
-                <div class="text-muted" style="font-size:0.7rem;margin-bottom:0.25rem">SHELTER UNITS</div>
-                <div style="font-size:1.4rem;font-weight:700;color:var(--accent-emerald)">${formatNumber(preds.shelter_required)}</div>
+                <div class="text-muted" style="font-size:0.7rem;margin-bottom:0.25rem">WATER SUPPLY</div>
+                <div style="font-size:1.4rem;font-weight:700;color:var(--accent-cyan)">${formatNumber(preds.water_required)}</div>
+            </div>
+            <div style="margin-bottom:0.75rem">
+                <div class="text-muted" style="font-size:0.7rem;margin-bottom:0.25rem">CLOTHING SETS</div>
+                <div style="font-size:1.4rem;font-weight:700;color:var(--accent-amber)">${formatNumber(preds.clothing_required)}</div>
             </div>
             <div class="metric" style="border-top:1px solid var(--border-color);padding-top:0.75rem;margin-top:0.5rem">
                 <span class="text-muted">Avg R²:</span>
@@ -213,8 +307,8 @@ function renderComparisonChart(predictions, colors) {
     if (!ctx) return;
 
     const models = Object.keys(predictions);
-    const labels = ['Food Required', 'Medical Kits', 'Shelter Units'];
-    const targets = ['food_required', 'medical_required', 'shelter_required'];
+    const labels = ['Food Required', 'Medical Kits', 'Water Supply', 'Clothing Sets'];
+    const targets = ['food_required', 'medical_required', 'water_required', 'clothing_required'];
 
     const datasets = models.map(model => ({
         label: model === 'xgboost' ? 'XGBoost' : model === 'random_forest' ? 'Random Forest' : 'Linear Regression',
@@ -391,7 +485,8 @@ function initDisasterMap(disasters, warehouses) {
                 <p><strong>Location:</strong> ${wh.district}, ${wh.state}</p>
                 <p><strong>Food Stock:</strong> ${Number(wh.food_stock).toLocaleString()}</p>
                 <p><strong>Medical Stock:</strong> ${Number(wh.medical_stock).toLocaleString()}</p>
-                <p><strong>Shelter Stock:</strong> ${Number(wh.shelter_stock).toLocaleString()}</p>
+                <p><strong>Water Stock:</strong> ${Number(wh.water_stock).toLocaleString()}</p>
+                <p><strong>Clothing Stock:</strong> ${Number(wh.clothing_stock).toLocaleString()}</p>
             `);
         });
     }
@@ -431,20 +526,21 @@ function renderDashboardCharts(data) {
         });
     }
 
-    // Resource Demand Bar Chart (Predicted vs. Allocated)
+    // Resource Demand Bar Chart (Predicted vs. Allocated) — 4 resources
     const rdCtx = document.getElementById('resource-demand-chart');
     if (rdCtx && data.resource_totals) {
         new Chart(rdCtx, {
             type: 'bar',
             data: {
-                labels: ['Food', 'Medical', 'Shelter'],
+                labels: ['Food', 'Medical', 'Water', 'Clothing'],
                 datasets: [
                     {
                         label: 'Predicted Demand',
                         data: [
                             data.resource_totals.food,
                             data.resource_totals.medical,
-                            data.resource_totals.shelter,
+                            data.resource_totals.water || 0,
+                            data.resource_totals.clothing || 0,
                         ],
                         backgroundColor: 'rgba(59, 130, 246, 0.45)',
                         borderColor: '#3b82f6',
@@ -456,7 +552,8 @@ function renderDashboardCharts(data) {
                         data: [
                             data.resource_allocated ? data.resource_allocated.food : 0,
                             data.resource_allocated ? data.resource_allocated.medical : 0,
-                            data.resource_allocated ? data.resource_allocated.shelter : 0,
+                            data.resource_allocated ? data.resource_allocated.water : 0,
+                            data.resource_allocated ? data.resource_allocated.clothing : 0,
                         ],
                         backgroundColor: 'rgba(16, 185, 129, 0.45)',
                         borderColor: '#10b981',

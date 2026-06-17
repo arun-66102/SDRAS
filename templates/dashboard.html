@@ -138,7 +138,8 @@
                         <th>Population</th>
                         <th>Food Req.</th>
                         <th>Medical Req.</th>
-                        <th>Shelter Req.</th>
+                        <th>Water Req.</th>
+                        <th>Clothing Req.</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -161,7 +162,8 @@
                         <td>{{ "{:,}".format(d.population_affected) }}</td>
                         <td>{{ "{:,}".format(d.food_required) }}</td>
                         <td>{{ "{:,}".format(d.medical_required) }}</td>
-                        <td>{{ "{:,}".format(d.shelter_required) }}</td>
+                        <td>{{ "{:,}".format(d.water_required) }}</td>
+                        <td>{{ "{:,}".format(d.clothing_required) }}</td>
                         <td>
                             <span class="badge {% if d.status == 'Active' %}badge-rose{% elif d.status == 'Allocated' %}badge-emerald{% elif d.status == 'Resolved' %}badge-blue{% else %}badge-amber{% endif %}">
                                 {{ d.status }}

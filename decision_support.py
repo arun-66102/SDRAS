@@ -45,13 +45,22 @@ def generate_recommendations(disaster, predicted_needs, allocation_result):
             "action": "Deploy mobile medical teams and request additional kits from NDRF HQ.",
         })
 
-    if summary.get("shelter_deficit", 0) > 0:
+    if summary.get("water_deficit", 0) > 0:
+        recommendations.append({
+            "type": "shortage",
+            "priority": "critical",
+            "icon": "droplet",
+            "message": f"Water supply deficit of {summary['water_deficit']:,} units",
+            "action": "Deploy water purification units and request emergency water tankers from neighbouring districts.",
+        })
+
+    if summary.get("clothing_deficit", 0) > 0:
         recommendations.append({
             "type": "shortage",
             "priority": "high",
-            "icon": "home",
-            "message": f"Shelter deficit of {summary['shelter_deficit']:,} units",
-            "action": "Set up temporary shelters in schools, community halls, and government buildings.",
+            "icon": "shirt",
+            "message": f"Clothing deficit of {summary['clothing_deficit']:,} units",
+            "action": "Request emergency clothing supplies from NGOs and central relief warehouses.",
         })
 
     # ── Disaster-type-specific recommendations ────────────────────────────
@@ -218,7 +227,8 @@ def generate_relief_plan(disaster, predicted_needs):
             "resources": {
                 "food": int(predicted_needs.get("food_required", 0) * 0.3),
                 "medical": int(predicted_needs.get("medical_required", 0) * 0.5),
-                "shelter": int(predicted_needs.get("shelter_required", 0) * 0.4),
+                "water": int(predicted_needs.get("water_required", 0) * 0.5),
+                "clothing": int(predicted_needs.get("clothing_required", 0) * 0.3),
             },
         },
         {
@@ -229,14 +239,15 @@ def generate_relief_plan(disaster, predicted_needs):
             "color": "#FF8800",
             "objectives": [
                 "Distribute food and water supplies",
-                "Set up temporary shelters and camps",
+                "Set up temporary camps and distribution centres",
                 "Provide ongoing medical care",
                 "Restore basic infrastructure",
             ],
             "resources": {
                 "food": int(predicted_needs.get("food_required", 0) * 0.5),
                 "medical": int(predicted_needs.get("medical_required", 0) * 0.35),
-                "shelter": int(predicted_needs.get("shelter_required", 0) * 0.4),
+                "water": int(predicted_needs.get("water_required", 0) * 0.35),
+                "clothing": int(predicted_needs.get("clothing_required", 0) * 0.5),
             },
         },
         {
@@ -254,7 +265,8 @@ def generate_relief_plan(disaster, predicted_needs):
             "resources": {
                 "food": int(predicted_needs.get("food_required", 0) * 0.2),
                 "medical": int(predicted_needs.get("medical_required", 0) * 0.15),
-                "shelter": int(predicted_needs.get("shelter_required", 0) * 0.2),
+                "water": int(predicted_needs.get("water_required", 0) * 0.15),
+                "clothing": int(predicted_needs.get("clothing_required", 0) * 0.2),
             },
         },
     ]

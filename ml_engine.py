@@ -3,7 +3,7 @@ Predictive Analytics Engine — ML Model Training & Prediction
 =============================================================
 Module ④ in the workflow.
 
-Trains three models for each of the three target variables:
+Trains three models for each of the four target variables:
   • XGBoost Regressor    (Gradient Boosting)
   • Random Forest        (Ensemble Trees)
   • Linear Regression    (Baseline Model)
@@ -11,7 +11,8 @@ Trains three models for each of the three target variables:
 Prediction Targets:
   • food_required     — f(population, severity, disaster_type, duration, rainfall)
   • medical_required  — f(population, severity, disaster_type, temperature)
-  • shelter_required  — f(population, severity, disaster_type, duration)
+  • water_required    — f(population, severity, disaster_type, duration, rainfall)
+  • clothing_required — f(population, severity, disaster_type, duration)
 """
 import os
 import warnings
@@ -49,7 +50,7 @@ FEATURE_COLS = [
     "pop_severity",          # interaction feature
     "severity_duration",     # interaction feature
 ]
-TARGET_COLS = ["food_required", "medical_required", "shelter_required"]
+TARGET_COLS = ["food_required", "medical_required", "water_required", "clothing_required"]
 MODEL_NAMES = ["xgboost", "random_forest", "linear_regression"]
 
 
@@ -109,8 +110,8 @@ def preprocess_single(disaster_type, severity, population_affected,
 # ─────────────────────────────────────────────────────────────────────────────
 class DisasterMLEngine:
     """
-    Manages training, evaluation, and prediction for all 3 models × 3 targets.
-    Total of 9 sub-models.
+    Manages training, evaluation, and prediction for all 3 models × 4 targets.
+    Total of 12 sub-models.
     """
 
     def __init__(self):
@@ -238,7 +239,7 @@ class DisasterMLEngine:
 
         Returns
         -------
-        dict — {model_name: {food_required, medical_required, shelter_required}}
+        dict — {model_name: {food_required, medical_required, water_required, clothing_required}}
         """
         if not self.is_trained:
             raise RuntimeError("Models not trained. Call train() or load_models() first.")

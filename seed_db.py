@@ -75,7 +75,13 @@ def seed():
                 longitude=row["longitude"],
                 food_stock=int(row["food_stock"]),
                 medical_stock=int(row["medical_stock"]),
-                shelter_stock=int(row["shelter_stock"]),
+                water_stock=int(row["water_stock"]),
+                clothing_stock=int(row["clothing_stock"]),
+                # Default minimum thresholds from config
+                min_food_threshold=Config.DEFAULT_MIN_THRESHOLD["food"],
+                min_medical_threshold=Config.DEFAULT_MIN_THRESHOLD["medical"],
+                min_water_threshold=Config.DEFAULT_MIN_THRESHOLD["water"],
+                min_clothing_threshold=Config.DEFAULT_MIN_THRESHOLD["clothing"],
             )
             db.session.add(wh)
 
@@ -99,7 +105,8 @@ def seed():
                 longitude=float(row["longitude"]),
                 food_required=int(row["food_required"]),
                 medical_required=int(row["medical_required"]),
-                shelter_required=int(row["shelter_required"]),
+                water_required=int(row["water_required"]),
+                clothing_required=int(row["clothing_required"]),
                 status="Active",
             )
             db.session.add(d)

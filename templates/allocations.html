@@ -51,7 +51,8 @@
                         <th>Distance</th>
                         <th>Food</th>
                         <th>Medical</th>
-                        <th>Shelter</th>
+                        <th>Water</th>
+                        <th>Clothing</th>
                         <th>Priority</th>
                         <th>Status</th>
                         <th>Date</th>
@@ -80,7 +81,8 @@
                         <td>{{ "%.1f"|format(a.distance_km) }} km</td>
                         <td>{{ "{:,}".format(a.food_allocated) }}</td>
                         <td>{{ "{:,}".format(a.medical_allocated) }}</td>
-                        <td>{{ "{:,}".format(a.shelter_allocated) }}</td>
+                        <td>{{ "{:,}".format(a.water_allocated) }}</td>
+                        <td>{{ "{:,}".format(a.clothing_allocated) }}</td>
                         <td>
                             <span class="fw-700 {% if a.priority <= 3 %}text-rose{% elif a.priority <= 6 %}text-amber{% else %}text-emerald{% endif %}">
                                 P{{ a.priority }}
@@ -98,7 +100,7 @@
                     {% endfor %}
                     {% if not allocations %}
                     <tr>
-                        <td colspan="10">
+                        <td colspan="11">
                             <div class="empty-state">
                                 <div class="empty-icon"><i data-lucide="package" style="width:48px;height:48px;color:var(--text-muted)"></i></div>
                                 <h3>No Allocations Yet</h3>

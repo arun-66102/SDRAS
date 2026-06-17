@@ -31,14 +31,30 @@
         </div>
         <div class="stat-value" data-counter="{{ total_medical }}">0</div>
     </div>
+    <div class="stat-card cyan">
+        <div class="stat-header">
+            <span class="stat-label">Total Water Stock</span>
+            <div class="stat-icon"><i data-lucide="droplet" style="color:var(--accent-cyan)"></i></div>
+        </div>
+        <div class="stat-value" data-counter="{{ total_water }}">0</div>
+    </div>
     <div class="stat-card amber">
         <div class="stat-header">
-            <span class="stat-label">Total Shelter Stock</span>
-            <div class="stat-icon"><i data-lucide="home" style="color:var(--accent-amber)"></i></div>
+            <span class="stat-label">Total Clothing Stock</span>
+            <div class="stat-icon"><i data-lucide="shirt" style="color:var(--accent-amber)"></i></div>
         </div>
-        <div class="stat-value" data-counter="{{ total_shelter }}">0</div>
+        <div class="stat-value" data-counter="{{ total_clothing }}">0</div>
     </div>
 </div>
+
+<!-- ─── ADD WAREHOUSE BUTTON (Admin only) ─────────────────────────── -->
+{% if current_user.role == 'admin' %}
+<div style="margin-bottom:1rem;display:flex;gap:0.5rem;justify-content:flex-end">
+    <button class="btn btn-primary btn-sm" onclick="openAddWarehouseModal()">
+        <i data-lucide="plus" style="width:14px;height:14px;vertical-align:middle;margin-right:0.25rem;display:inline-block"></i> Add New Warehouse
+    </button>
+</div>
+{% endif %}
 
 <!-- ─── WAREHOUSE MAP ───────────────────────────────────────────────── -->
 <div class="card mb-3">
@@ -55,7 +71,7 @@
 <!-- ─── WAREHOUSE CARDS GRID ────────────────────────────────────────── -->
 <div class="grid-3">
     {% for wh in warehouses %}
-    <div class="warehouse-card">
+    <div class="warehouse-card" id="wh-card-{{ wh.id }}">
         <div class="wh-header">
             <div class="wh-icon"><i data-lucide="warehouse" style="width:20px;height:20px;color:var(--text-secondary)"></i></div>
             <div>
@@ -71,6 +87,7 @@
                 </div>
                 <div class="bar-track">
                     <div class="bar-fill" data-width="{{ [(wh.food_stock / 5000) * 100, 100]|min }}"></div>
+                    <div class="threshold-marker" style="left:{{ [(wh.min_food_threshold / 5000) * 100, 100]|min }}%" title="Min Threshold: {{ '{:,}'.format(wh.min_food_threshold) }}"></div>
                 </div>
             </div>
             <div class="stock-bar medical">
@@ -80,28 +97,194 @@
                 </div>
                 <div class="bar-track">
                     <div class="bar-fill" data-width="{{ [(wh.medical_stock / 1000) * 100, 100]|min }}"></div>
+                    <div class="threshold-marker" style="left:{{ [(wh.min_medical_threshold / 1000) * 100, 100]|min }}%" title="Min Threshold: {{ '{:,}'.format(wh.min_medical_threshold) }}"></div>
                 </div>
             </div>
-            <div class="stock-bar shelter">
+            <div class="stock-bar water">
                 <div class="stock-label">
-                    <span>Shelter Stock</span>
-                    <span>{{ "{:,}".format(wh.shelter_stock) }}</span>
+                    <span>Water Stock</span>
+                    <span>{{ "{:,}".format(wh.water_stock) }}</span>
                 </div>
                 <div class="bar-track">
-                    <div class="bar-fill" data-width="{{ [(wh.shelter_stock / 500) * 100, 100]|min }}"></div>
+                    <div class="bar-fill" data-width="{{ [(wh.water_stock / 3000) * 100, 100]|min }}"></div>
+                    <div class="threshold-marker" style="left:{{ [(wh.min_water_threshold / 3000) * 100, 100]|min }}%" title="Min Threshold: {{ '{:,}'.format(wh.min_water_threshold) }}"></div>
+                </div>
+            </div>
+            <div class="stock-bar clothing">
+                <div class="stock-label">
+                    <span>Clothing Stock</span>
+                    <span>{{ "{:,}".format(wh.clothing_stock) }}</span>
+                </div>
+                <div class="bar-track">
+                    <div class="bar-fill" data-width="{{ [(wh.clothing_stock / 800) * 100, 100]|min }}"></div>
+                    <div class="threshold-marker" style="left:{{ [(wh.min_clothing_threshold / 800) * 100, 100]|min }}%" title="Min Threshold: {{ '{:,}'.format(wh.min_clothing_threshold) }}"></div>
                 </div>
             </div>
         </div>
+        <!-- Threshold info -->
+        <div class="threshold-info">
+            <span class="threshold-label">Min Reserve:</span>
+            F:{{ "{:,}".format(wh.min_food_threshold) }} · M:{{ "{:,}".format(wh.min_medical_threshold) }} · W:{{ "{:,}".format(wh.min_water_threshold) }} · C:{{ "{:,}".format(wh.min_clothing_threshold) }}
+        </div>
+        <!-- Action buttons -->
+        {% if current_user.role in ['admin', 'officer'] %}
+        <div class="wh-actions">
+            <button class="btn btn-outline btn-sm" onclick="openEditStockModal({{ wh.id }}, '{{ wh.warehouse_id }}', {{ wh.food_stock }}, {{ wh.medical_stock }}, {{ wh.water_stock }}, {{ wh.clothing_stock }})">
+                <i data-lucide="edit-3" style="width:12px;height:12px;vertical-align:middle;margin-right:0.15rem;display:inline-block"></i> Edit Stock
+            </button>
+            {% if current_user.role == 'admin' %}
+            <button class="btn btn-outline btn-sm" onclick="openThresholdModal({{ wh.id }}, '{{ wh.warehouse_id }}', {{ wh.min_food_threshold }}, {{ wh.min_medical_threshold }}, {{ wh.min_water_threshold }}, {{ wh.min_clothing_threshold }})">
+                <i data-lucide="shield" style="width:12px;height:12px;vertical-align:middle;margin-right:0.15rem;display:inline-block"></i> Set Threshold
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
     </div>
     {% endfor %}
+</div>
+
+<!-- ═══ EDIT STOCK MODAL ═══════════════════════════════════════════════ -->
+<div id="edit-stock-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+        <div class="modal-header">
+            <h3 id="edit-stock-title">Edit Warehouse Stock</h3>
+            <button class="modal-close" onclick="closeModal('edit-stock-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="edit-wh-id" />
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="edit-food-stock">Food Stock</label>
+                    <input type="number" id="edit-food-stock" class="form-control" min="0" />
+                </div>
+                <div class="form-group">
+                    <label for="edit-medical-stock">Medical Stock</label>
+                    <input type="number" id="edit-medical-stock" class="form-control" min="0" />
+                </div>
+                <div class="form-group">
+                    <label for="edit-water-stock">Water Stock</label>
+                    <input type="number" id="edit-water-stock" class="form-control" min="0" />
+                </div>
+                <div class="form-group">
+                    <label for="edit-clothing-stock">Clothing Stock</label>
+                    <input type="number" id="edit-clothing-stock" class="form-control" min="0" />
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('edit-stock-modal')">Cancel</button>
+            <button class="btn btn-primary" onclick="submitStockUpdate()">Update Stock</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SET THRESHOLD MODAL ════════════════════════════════════════════ -->
+<div id="threshold-modal" class="modal-backdrop">
+    <div class="modal-content glass">
+        <div class="modal-header">
+            <h3 id="threshold-title">Set Minimum Thresholds</h3>
+            <button class="modal-close" onclick="closeModal('threshold-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p class="text-muted" style="font-size:0.8rem;margin-bottom:1rem">
+                Minimum stock reserved for local emergency supply. This stock will not be allocated to external disasters.
+                Values must be positive (greater than 0).
+            </p>
+            <input type="hidden" id="threshold-wh-id" />
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="threshold-food">Food Threshold</label>
+                    <input type="number" id="threshold-food" class="form-control" min="1" />
+                </div>
+                <div class="form-group">
+                    <label for="threshold-medical">Medical Threshold</label>
+                    <input type="number" id="threshold-medical" class="form-control" min="1" />
+                </div>
+                <div class="form-group">
+                    <label for="threshold-water">Water Threshold</label>
+                    <input type="number" id="threshold-water" class="form-control" min="1" />
+                </div>
+                <div class="form-group">
+                    <label for="threshold-clothing">Clothing Threshold</label>
+                    <input type="number" id="threshold-clothing" class="form-control" min="1" />
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('threshold-modal')">Cancel</button>
+            <button class="btn btn-success" onclick="submitThresholdUpdate()">Save Thresholds</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ ADD NEW WAREHOUSE MODAL ════════════════════════════════════════ -->
+<div id="add-warehouse-modal" class="modal-backdrop">
+    <div class="modal-content glass" style="max-width:600px">
+        <div class="modal-header">
+            <h3>Add New Warehouse</h3>
+            <button class="modal-close" onclick="closeModal('add-warehouse-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="new-wh-id">Warehouse ID <span class="text-muted" style="font-size:0.7rem">(auto-generated if empty)</span></label>
+                    <input type="text" id="new-wh-id" class="form-control" placeholder="e.g. WH031" />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-name">Warehouse Name</label>
+                    <input type="text" id="new-wh-name" class="form-control" placeholder="NDRF Regional Depot — City" required />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-district">District</label>
+                    <select id="new-wh-district" class="form-control" onchange="onNewWhDistrictChange(this)">
+                        <option value="">Select district...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-state">State</label>
+                    <input type="text" id="new-wh-state" class="form-control" placeholder="Auto-filled" readonly />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-lat">Latitude</label>
+                    <input type="number" id="new-wh-lat" class="form-control" step="0.0001" placeholder="Auto-filled" readonly />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-lon">Longitude</label>
+                    <input type="number" id="new-wh-lon" class="form-control" step="0.0001" placeholder="Auto-filled" readonly />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-food">Initial Food Stock</label>
+                    <input type="number" id="new-wh-food" class="form-control" min="0" value="0" />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-medical">Initial Medical Stock</label>
+                    <input type="number" id="new-wh-medical" class="form-control" min="0" value="0" />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-water">Initial Water Stock</label>
+                    <input type="number" id="new-wh-water" class="form-control" min="0" value="0" />
+                </div>
+                <div class="form-group">
+                    <label for="new-wh-clothing">Initial Clothing Stock</label>
+                    <input type="number" id="new-wh-clothing" class="form-control" min="0" value="0" />
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('add-warehouse-modal')">Cancel</button>
+            <button class="btn btn-primary" onclick="submitNewWarehouse()">Create Warehouse</button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script id="warehouses-data" type="application/json">{{ warehouses_json | safe }}</script>
+<script id="districts-data" type="application/json">{{ districts_json | safe }}</script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     const warehouses = JSON.parse(document.getElementById('warehouses-data').textContent);
+    const districts = JSON.parse(document.getElementById('districts-data').textContent);
     initDisasterMap([], warehouses);
 
     // Apply stock bar progress widths
@@ -111,5 +294,155 @@
             el.style.width = widthVal + '%';
         }
     });
+
+    // ── Edit Stock Modal ──────────────────────────────────────────────
+    function openEditStockModal(whId, whCode, food, medical, water, clothing) {
+        document.getElementById('edit-wh-id').value = whId;
+        document.getElementById('edit-stock-title').textContent = 'Edit Stock — ' + whCode;
+        document.getElementById('edit-food-stock').value = food;
+        document.getElementById('edit-medical-stock').value = medical;
+        document.getElementById('edit-water-stock').value = water;
+        document.getElementById('edit-clothing-stock').value = clothing;
+        document.getElementById('edit-stock-modal').classList.add('open');
+    }
+
+    function submitStockUpdate() {
+        const whId = document.getElementById('edit-wh-id').value;
+        const data = {
+            food_stock: parseInt(document.getElementById('edit-food-stock').value) || 0,
+            medical_stock: parseInt(document.getElementById('edit-medical-stock').value) || 0,
+            water_stock: parseInt(document.getElementById('edit-water-stock').value) || 0,
+            clothing_stock: parseInt(document.getElementById('edit-clothing-stock').value) || 0,
+        };
+
+        fetch(`/api/warehouse/${whId}/stock`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.error) {
+                showFlash(result.error, 'error');
+            } else {
+                showFlash(result.message, 'success');
+                closeModal('edit-stock-modal');
+                setTimeout(() => location.reload(), 1000);
+            }
+        })
+        .catch(err => showFlash('Update failed: ' + err.message, 'error'));
+    }
+
+    // ── Threshold Modal ───────────────────────────────────────────────
+    function openThresholdModal(whId, whCode, food, medical, water, clothing) {
+        document.getElementById('threshold-wh-id').value = whId;
+        document.getElementById('threshold-title').textContent = 'Set Thresholds — ' + whCode;
+        document.getElementById('threshold-food').value = food;
+        document.getElementById('threshold-medical').value = medical;
+        document.getElementById('threshold-water').value = water;
+        document.getElementById('threshold-clothing').value = clothing;
+        document.getElementById('threshold-modal').classList.add('open');
+    }
+
+    function submitThresholdUpdate() {
+        const whId = document.getElementById('threshold-wh-id').value;
+        const data = {
+            min_food_threshold: parseInt(document.getElementById('threshold-food').value) || 1,
+            min_medical_threshold: parseInt(document.getElementById('threshold-medical').value) || 1,
+            min_water_threshold: parseInt(document.getElementById('threshold-water').value) || 1,
+            min_clothing_threshold: parseInt(document.getElementById('threshold-clothing').value) || 1,
+        };
+
+        // Client-side validation: no zero or negative
+        for (const [key, val] of Object.entries(data)) {
+            if (val <= 0) {
+                showFlash('Threshold values must be positive (greater than 0)', 'error');
+                return;
+            }
+        }
+
+        fetch(`/api/warehouse/${whId}/threshold`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.error) {
+                showFlash(result.error, 'error');
+            } else {
+                showFlash(result.message, 'success');
+                closeModal('threshold-modal');
+                setTimeout(() => location.reload(), 1000);
+            }
+        })
+        .catch(err => showFlash('Update failed: ' + err.message, 'error'));
+    }
+
+    // ── Add Warehouse Modal ───────────────────────────────────────────
+    function openAddWarehouseModal() {
+        // Populate district dropdown
+        const select = document.getElementById('new-wh-district');
+        select.innerHTML = '<option value="">Select district...</option>';
+        districts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.district;
+            opt.dataset.state = d.state;
+            opt.dataset.lat = d.lat;
+            opt.dataset.lon = d.lon;
+            opt.textContent = d.district + ', ' + d.state;
+            select.appendChild(opt);
+        });
+        document.getElementById('add-warehouse-modal').classList.add('open');
+    }
+
+    function onNewWhDistrictChange(selectEl) {
+        const option = selectEl.options[selectEl.selectedIndex];
+        document.getElementById('new-wh-state').value = option.dataset.state || '';
+        document.getElementById('new-wh-lat').value = option.dataset.lat || '';
+        document.getElementById('new-wh-lon').value = option.dataset.lon || '';
+    }
+
+    function submitNewWarehouse() {
+        const data = {
+            warehouse_id: document.getElementById('new-wh-id').value.trim(),
+            warehouse_name: document.getElementById('new-wh-name').value.trim(),
+            district: document.getElementById('new-wh-district').value,
+            state: document.getElementById('new-wh-state').value,
+            latitude: parseFloat(document.getElementById('new-wh-lat').value) || 0,
+            longitude: parseFloat(document.getElementById('new-wh-lon').value) || 0,
+            food_stock: parseInt(document.getElementById('new-wh-food').value) || 0,
+            medical_stock: parseInt(document.getElementById('new-wh-medical').value) || 0,
+            water_stock: parseInt(document.getElementById('new-wh-water').value) || 0,
+            clothing_stock: parseInt(document.getElementById('new-wh-clothing').value) || 0,
+        };
+
+        if (!data.warehouse_name || !data.district || !data.state) {
+            showFlash('Please fill in warehouse name and select a district.', 'error');
+            return;
+        }
+
+        fetch('/api/warehouse/new', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.error) {
+                showFlash(result.error, 'error');
+            } else {
+                showFlash(result.message, 'success');
+                closeModal('add-warehouse-modal');
+                setTimeout(() => location.reload(), 1000);
+            }
+        })
+        .catch(err => showFlash('Creation failed: ' + err.message, 'error'));
+    }
+
+    // ── Generic Modal Close ───────────────────────────────────────────
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.remove('open');
+    }
 </script>
 {% endblock %}

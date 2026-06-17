@@ -1455,7 +1455,72 @@ textarea.form-control {
 
 .stock-bar.food .bar-fill { background: var(--gradient-blue); }
 .stock-bar.medical .bar-fill { background: var(--gradient-rose); }
-.stock-bar.shelter .bar-fill { background: var(--gradient-emerald); }
+.stock-bar.water .bar-fill { background: linear-gradient(135deg, #06b6d4, #22d3ee); }
+.stock-bar.clothing .bar-fill { background: var(--gradient-amber); }
+
+/* Threshold marker on stock bars */
+.bar-track {
+    position: relative;
+    overflow: visible !important;
+}
+
+.threshold-marker {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 12px;
+    background: var(--accent-rose);
+    border-radius: 1px;
+    z-index: 1;
+    opacity: 0.7;
+    cursor: help;
+    transition: opacity var(--transition-fast);
+}
+
+.threshold-marker:hover {
+    opacity: 1;
+}
+
+/* Threshold info display below stock bars */
+.threshold-info {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(244, 63, 94, 0.04);
+    border: 1px solid rgba(244, 63, 94, 0.1);
+    border-radius: var(--radius-sm);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+}
+
+.threshold-info .threshold-label {
+    font-weight: 700;
+    color: var(--accent-rose);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-right: 0.35rem;
+}
+
+/* Warehouse card action buttons */
+.wh-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Rainfall field conditional styles */
+.form-group.rainfall-required {
+    border: 1px solid var(--accent-amber);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem;
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.form-group.rainfall-optional {
+    opacity: 0.85;
+}
+
 
 /* ── Tab system ─────────────────────────────────────────────────────────── */
 .tabs {

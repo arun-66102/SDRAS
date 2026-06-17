@@ -7,6 +7,7 @@ Matches predicted resource demand with warehouse supply using:
   • Priority allocation based on disaster severity
   • Shortest distance preference (Haversine)
   • Stock validation and multi-warehouse splitting
+  • Minimum threshold enforcement — reserves stock for local emergency supply
 """
 from geo_utils import find_nearest_warehouses
 
@@ -21,9 +22,11 @@ def allocate_resources(disaster, warehouses_list, predicted_needs):
         Must include: latitude, longitude, severity, id
     warehouses_list : list[dict]
         Each warehouse dict: id, warehouse_id, latitude, longitude,
-                             food_stock, medical_stock, shelter_stock
+                             food_stock, medical_stock, water_stock, clothing_stock,
+                             min_food_threshold, min_medical_threshold,
+                             min_water_threshold, min_clothing_threshold
     predicted_needs : dict
-        {food_required: int, medical_required: int, shelter_required: int}
+        {food_required: int, medical_required: int, water_required: int, clothing_required: int}
 
     Returns
     -------
@@ -40,30 +43,36 @@ def allocate_resources(disaster, warehouses_list, predicted_needs):
         n=len(warehouses_list),
     )
 
-    # Resource types to allocate
+    # Resource types to allocate: (key, demand_key, stock_key, threshold_key)
     resource_types = [
-        ("food", "food_required", "food_stock"),
-        ("medical", "medical_required", "medical_stock"),
-        ("shelter", "shelter_required", "shelter_stock"),
+        ("food", "food_required", "food_stock", "min_food_threshold"),
+        ("medical", "medical_required", "medical_stock", "min_medical_threshold"),
+        ("water", "water_required", "water_stock", "min_water_threshold"),
+        ("clothing", "clothing_required", "clothing_stock", "min_clothing_threshold"),
     ]
 
     # Track remaining demand
     remaining = {
         "food": predicted_needs.get("food_required", 0),
         "medical": predicted_needs.get("medical_required", 0),
-        "shelter": predicted_needs.get("shelter_required", 0),
+        "water": predicted_needs.get("water_required", 0),
+        "clothing": predicted_needs.get("clothing_required", 0),
     }
 
     # Track allocations per warehouse
     wh_allocations = {}  # warehouse_id -> allocation details
 
-    for res_key, demand_key, stock_key in resource_types:
+    for res_key, demand_key, stock_key, threshold_key in resource_types:
         if remaining[res_key] <= 0:
             continue
 
         for wh in sorted_warehouses:
             wh_id = wh["id"]
-            available = wh.get(stock_key, 0)
+            total_stock = wh.get(stock_key, 0)
+            threshold = wh.get(threshold_key, 0)
+
+            # Available stock = total stock minus reserved threshold
+            available = max(0, total_stock - threshold)
 
             if available <= 0:
                 continue
@@ -80,7 +89,8 @@ def allocate_resources(disaster, warehouses_list, predicted_needs):
                     "distance_km": wh.get("distance_km", 0),
                     "food_allocated": 0,
                     "medical_allocated": 0,
-                    "shelter_allocated": 0,
+                    "water_allocated": 0,
+                    "clothing_allocated": 0,
                 }
 
             alloc_key = f"{res_key}_allocated"
@@ -99,16 +109,18 @@ def allocate_resources(disaster, warehouses_list, predicted_needs):
     # Calculate totals
     total_food = sum(a["food_allocated"] for a in allocations)
     total_medical = sum(a["medical_allocated"] for a in allocations)
-    total_shelter = sum(a["shelter_allocated"] for a in allocations)
+    total_water = sum(a["water_allocated"] for a in allocations)
+    total_clothing = sum(a["clothing_allocated"] for a in allocations)
 
     # Determine allocation status
     food_met = total_food >= predicted_needs.get("food_required", 0)
     medical_met = total_medical >= predicted_needs.get("medical_required", 0)
-    shelter_met = total_shelter >= predicted_needs.get("shelter_required", 0)
+    water_met = total_water >= predicted_needs.get("water_required", 0)
+    clothing_met = total_clothing >= predicted_needs.get("clothing_required", 0)
 
-    if food_met and medical_met and shelter_met:
+    if food_met and medical_met and water_met and clothing_met:
         status = "Fully Allocated"
-    elif total_food > 0 or total_medical > 0 or total_shelter > 0:
+    elif total_food > 0 or total_medical > 0 or total_water > 0 or total_clothing > 0:
         status = "Partially Allocated"
     else:
         status = "Insufficient Stock"
@@ -119,13 +131,16 @@ def allocate_resources(disaster, warehouses_list, predicted_needs):
     summary = {
         "total_food_allocated": total_food,
         "total_medical_allocated": total_medical,
-        "total_shelter_allocated": total_shelter,
+        "total_water_allocated": total_water,
+        "total_clothing_allocated": total_clothing,
         "food_demand": predicted_needs.get("food_required", 0),
         "medical_demand": predicted_needs.get("medical_required", 0),
-        "shelter_demand": predicted_needs.get("shelter_required", 0),
+        "water_demand": predicted_needs.get("water_required", 0),
+        "clothing_demand": predicted_needs.get("clothing_required", 0),
         "food_deficit": max(0, predicted_needs.get("food_required", 0) - total_food),
         "medical_deficit": max(0, predicted_needs.get("medical_required", 0) - total_medical),
-        "shelter_deficit": max(0, predicted_needs.get("shelter_required", 0) - total_shelter),
+        "water_deficit": max(0, predicted_needs.get("water_required", 0) - total_water),
+        "clothing_deficit": max(0, predicted_needs.get("clothing_required", 0) - total_clothing),
         "warehouses_used": len(allocations),
         "priority": priority,
         "status": status,
