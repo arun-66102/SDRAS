@@ -138,14 +138,19 @@ class DisasterMLEngine:
         print(f"  Train: {X_train.shape[0]} rows | Test: {X_test.shape[0]} rows\n")
 
         # Define models
+        xgb_params = {
+            "n_estimators": 200,
+            "max_depth": 6,
+            "learning_rate": 0.1,
+            "random_state": Config.RANDOM_STATE,
+        }
+        if XGBRegressor.__name__ == "GradientBoostingRegressor":
+            xgb_params["verbose"] = 0
+        else:
+            xgb_params["verbosity"] = 0
+
         model_factories = {
-            "xgboost": lambda: XGBRegressor(
-                n_estimators=200,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=Config.RANDOM_STATE,
-                verbosity=0,
-            ),
+            "xgboost": lambda: XGBRegressor(**xgb_params),
             "random_forest": lambda: RandomForestRegressor(
                 n_estimators=80,
                 max_depth=8,

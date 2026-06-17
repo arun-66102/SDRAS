@@ -262,7 +262,7 @@ export default function DashboardPage() {
       <div className="card">
         <div className="card-header">
           <h3><FileText style={{ width: 16, height: 16, verticalAlign: 'middle', marginRight: '0.25rem', display: 'inline-block' }} /> Recent Disasters</h3>
-          {user && (user.role === 'admin' || user.role === 'officer') && (
+          {user && (user.role === 'admin' || user.role === 'officer' || user.role === 'ngo') && (
             <Link to="/disaster/new" className="btn btn-primary btn-sm">+ Report New</Link>
           )}
         </div>

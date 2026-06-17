@@ -23,6 +23,13 @@ from flask_login import (
 from config import Config
 from models import Allocation, Disaster, User, Warehouse, db
 
+ALLOWED_ROLES = ("admin", "officer", "ngo")
+ROLE_LABELS = {
+    "admin": "Administrator",
+    "officer": "Regional Warehouse Officer",
+    "ngo": "Disaster Reporter / NGO Coordinator",
+}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ROLE-BASED ACCESS CONTROL
@@ -32,10 +39,51 @@ def role_required(*roles):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             if not current_user.is_authenticated or current_user.role not in roles:
+                if request.path.startswith('/api/'):
+                    return jsonify({"error": "Forbidden"}), 403
                 abort(403)
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+
+def serialize_user(user, include_warehouses=False):
+    data = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "role_label": ROLE_LABELS.get(user.role, user.role),
+    }
+    if include_warehouses:
+        data["warehouses"] = [
+            {
+                "id": w.id,
+                "warehouse_id": w.warehouse_id,
+                "warehouse_name": w.warehouse_name,
+                "district": w.district,
+                "state": w.state,
+            }
+            for w in user.warehouses
+        ]
+    return data
+
+
+def bootstrap_admin_from_login(username, password):
+    safe_username = username.strip()
+    full_name = " ".join(part.capitalize() for part in safe_username.replace("_", " ").split()) or "Administrator"
+    email_slug = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in safe_username.lower())
+    user = User(
+        username=safe_username,
+        email=f"{email_slug}@bootstrap.local",
+        full_name=full_name,
+        role="admin",
+    )
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return user
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -105,32 +153,37 @@ def api_login():
     if current_user.is_authenticated:
         return jsonify({
             "message": "Already authenticated",
-            "user": {
-                "id": current_user.id,
-                "username": current_user.username,
-                "full_name": current_user.full_name,
-                "role": current_user.role
-            }
+            "user": serialize_user(current_user),
         })
 
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
+    if not username or not password:
+        return jsonify({"error": "Username and password are required."}), 400
 
     user = User.query.filter_by(username=username).first()
     if user and user.check_password(password):
         login_user(user)
         return jsonify({
             "message": f"Welcome back, {user.full_name}!",
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "full_name": user.full_name,
-                "role": user.role
-            }
+            "user": serialize_user(user),
         })
-    else:
-        return jsonify({"error": "Invalid username or password."}), 401
+
+    if not user and User.query.count() == 0:
+        try:
+            user = bootstrap_admin_from_login(username, password)
+            login_user(user)
+            return jsonify({
+                "message": f"Admin account created for {user.full_name}.",
+                "user": serialize_user(user),
+                "bootstrapped": True,
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"error": str(e)}), 400
+
+    return jsonify({"error": "Invalid username or password."}), 401
 
 
 @app.route("/api/auth/logout", methods=["POST"])
@@ -143,14 +196,7 @@ def api_logout():
 @app.route("/api/auth/me")
 def api_me():
     if current_user.is_authenticated:
-        return jsonify({
-            "user": {
-                "id": current_user.id,
-                "username": current_user.username,
-                "full_name": current_user.full_name,
-                "role": current_user.role
-            }
-        })
+        return jsonify({"user": serialize_user(current_user, include_warehouses=True)})
     return jsonify({"user": None}), 401
 
 
@@ -161,8 +207,14 @@ def api_me():
 @login_required
 def api_dashboard():
     disasters = Disaster.query.order_by(Disaster.id.desc()).all()
-    warehouses = Warehouse.query.all()
-    allocations = Allocation.query.all()
+    
+    if current_user.role == "officer":
+        warehouses = current_user.warehouses
+        warehouse_ids = [w.id for w in warehouses]
+        allocations = Allocation.query.filter(Allocation.warehouse_pk.in_(warehouse_ids)).all() if warehouse_ids else []
+    else:
+        warehouses = Warehouse.query.all()
+        allocations = Allocation.query.all()
 
     # Stats
     stats = {
@@ -255,7 +307,7 @@ def api_dashboard():
 # ═══════════════════════════════════════════════════════════════════════════
 @app.route("/api/disaster/form-data")
 @login_required
-@role_required("admin", "officer")
+@role_required("admin", "officer", "ngo")
 def api_disaster_form_data():
     return jsonify({
         "disaster_types": Config.DISASTER_TYPES,
@@ -266,7 +318,7 @@ def api_disaster_form_data():
 
 @app.route("/api/disaster/new", methods=["POST"])
 @login_required
-@role_required("admin", "officer")
+@role_required("admin", "officer", "ngo")
 def api_disaster_new():
     try:
         data = request.get_json() or {}
@@ -389,7 +441,11 @@ def api_predict():
 @app.route("/api/allocations")
 @login_required
 def api_allocations():
-    allocations = Allocation.query.order_by(Allocation.id.desc()).all()
+    if current_user.role == "officer":
+        warehouse_ids = [w.id for w in current_user.warehouses]
+        allocations = Allocation.query.filter(Allocation.warehouse_pk.in_(warehouse_ids)).order_by(Allocation.id.desc()).all() if warehouse_ids else []
+    else:
+        allocations = Allocation.query.order_by(Allocation.id.desc()).all()
 
     unique_disaster_ids = list(set(a.disaster_id for a in allocations))
     disaster_statuses = {}
@@ -451,8 +507,13 @@ def api_allocate():
         if not disaster:
             return jsonify({"error": "Disaster not found"}), 404
 
-        # Get all warehouses
-        warehouses = Warehouse.query.all()
+        # Get all warehouses matching user scope
+        if current_user.role == "officer":
+            warehouses = current_user.warehouses
+            if not warehouses:
+                return jsonify({"error": "No warehouses assigned to you for resource allocation."}), 403
+        else:
+            warehouses = Warehouse.query.all()
         warehouses_list = [
             {
                 "id": w.id,
@@ -539,7 +600,10 @@ def api_allocate():
 @app.route("/api/warehouses")
 @login_required
 def api_warehouses():
-    warehouses = Warehouse.query.all()
+    if current_user.role == "officer":
+        warehouses = current_user.warehouses
+    else:
+        warehouses = Warehouse.query.all()
 
     total_food = sum(w.food_stock for w in warehouses)
     total_medical = sum(w.medical_stock for w in warehouses)
@@ -589,6 +653,10 @@ def api_update_warehouse_stock(wh_id):
         wh = db.session.get(Warehouse, wh_id)
         if not wh:
             return jsonify({"error": "Warehouse not found"}), 404
+
+        # Enforce warehouse access constraint for officers
+        if current_user.role == "officer" and wh not in current_user.warehouses:
+            return jsonify({"error": "Access denied: you do not have permission to manage this warehouse."}), 403
 
         data = request.get_json()
 
@@ -849,6 +917,159 @@ def api_reports():
         "relief_plan": relief_plan,
         "active_disaster": active_disaster_data,
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API — Admin User & Warehouse Management (Feature: User Promotion & RBAC)
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route("/api/admin/dashboard", methods=["GET"])
+@login_required
+@role_required("admin")
+def api_admin_dashboard():
+    users = User.query.order_by(User.created_at.desc()).all()
+    warehouses = Warehouse.query.all()
+    disasters = Disaster.query.order_by(Disaster.id.desc()).all()
+    allocations = Allocation.query.all()
+
+    role_counts = {role: 0 for role in ALLOWED_ROLES}
+    for user in users:
+        role_counts[user.role] = role_counts.get(user.role, 0) + 1
+
+    low_stock = [
+        {
+            "id": w.id,
+            "warehouse_id": w.warehouse_id,
+            "warehouse_name": w.warehouse_name,
+            "district": w.district,
+            "state": w.state,
+            "food_stock": w.food_stock,
+            "medical_stock": w.medical_stock,
+            "water_stock": w.water_stock,
+            "clothing_stock": w.clothing_stock,
+        }
+        for w in warehouses
+        if (
+            w.food_stock < w.min_food_threshold
+            or w.medical_stock < w.min_medical_threshold
+            or w.water_stock < w.min_water_threshold
+            or w.clothing_stock < w.min_clothing_threshold
+        )
+    ]
+
+    return jsonify({
+        "stats": {
+            "total_users": len(users),
+            "admins": role_counts.get("admin", 0),
+            "officers": role_counts.get("officer", 0),
+            "reporters": role_counts.get("ngo", 0),
+            "total_warehouses": len(warehouses),
+            "active_disasters": sum(1 for d in disasters if d.status == "Active"),
+            "total_allocations": len(set(a.disaster_id for a in allocations)),
+            "low_stock_warehouses": len(low_stock),
+        },
+        "role_counts": role_counts,
+        "recent_users": [serialize_user(u, include_warehouses=True) for u in users[:8]],
+        "low_stock": low_stock[:8],
+        "recent_disasters": [
+            {
+                "id": d.id,
+                "disaster_type": d.disaster_type,
+                "severity": d.severity,
+                "district": d.district,
+                "state": d.state,
+                "status": d.status,
+            }
+            for d in disasters[:8]
+        ],
+    })
+
+
+@app.route("/api/admin/users", methods=["GET"])
+@login_required
+@role_required("admin")
+def api_admin_users():
+    users = User.query.all()
+    users_list = [serialize_user(u, include_warehouses=True) for u in users]
+    return jsonify({"users": users_list})
+
+
+@app.route("/api/admin/users", methods=["POST"])
+@login_required
+@role_required("admin")
+def api_admin_create_user():
+    try:
+        data = request.get_json() or {}
+        username = data.get("username", "").strip()
+        email = data.get("email", "").strip()
+        full_name = data.get("full_name", "").strip()
+        password = data.get("password", "")
+        role = data.get("role", "ngo")
+
+        if not username or not email or not full_name or not password:
+            return jsonify({"error": "Username, email, full name, and password are required."}), 400
+        if role not in ALLOWED_ROLES:
+            return jsonify({"error": "Invalid role."}), 400
+        if len(password) < 6:
+            return jsonify({"error": "Password must be at least 6 characters."}), 400
+        if User.query.filter_by(username=username).first():
+            return jsonify({"error": "Username already exists."}), 400
+        if User.query.filter_by(email=email).first():
+            return jsonify({"error": "Email already exists."}), 400
+
+        user = User(username=username, email=email, full_name=full_name, role=role)
+        user.set_password(password)
+
+        if role == "officer":
+            warehouse_ids = data.get("warehouse_ids", [])
+            user.warehouses = [w for w in (db.session.get(Warehouse, wh_id) for wh_id in warehouse_ids) if w]
+
+        db.session.add(user)
+        db.session.commit()
+        return jsonify({
+            "message": f"User {user.username} created successfully.",
+            "user": serialize_user(user, include_warehouses=True),
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["PUT"])
+@login_required
+@role_required("admin")
+def api_admin_update_user(user_id):
+    try:
+        data = request.get_json() or {}
+        user = db.session.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        new_role = data.get("role")
+        if new_role:
+            if new_role not in ALLOWED_ROLES:
+                return jsonify({"error": "Invalid role"}), 400
+            user.role = new_role
+
+        # Handle warehouse assignments
+        warehouse_ids = data.get("warehouse_ids", [])
+        if user.role == "officer":
+            assigned_warehouses = []
+            for wh_id in warehouse_ids:
+                wh = db.session.get(Warehouse, wh_id)
+                if wh:
+                    assigned_warehouses.append(wh)
+            user.warehouses = assigned_warehouses
+        else:
+            user.warehouses = []
+
+        db.session.commit()
+        return jsonify({
+            "message": f"User {user.username} updated successfully.",
+            "user": serialize_user(user, include_warehouses=True),
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
 
 
 # ═══════════════════════════════════════════════════════════════════════════

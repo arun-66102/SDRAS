@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   Shield, LayoutDashboard, AlertTriangle, Cpu,
-  Package, Warehouse, FileText
+  Package, Warehouse, FileText, Users, Settings
 } from 'lucide-react'
 
 export default function Sidebar({ activePage, isOpen, onClose }) {
@@ -36,7 +36,7 @@ export default function Sidebar({ activePage, isOpen, onClose }) {
 
           <div className="nav-section">
             <div className="nav-section-title">Operations</div>
-            {user && (user.role === 'admin' || user.role === 'officer') && (
+            {user && (user.role === 'admin' || user.role === 'officer' || user.role === 'ngo') && (
               <Link to="/disaster/new" className={`nav-link ${activePage === 'disaster_form' ? 'active' : ''}`} onClick={onClose}>
                 <span className="nav-icon"><AlertTriangle style={{ width: 16, height: 16 }} /></span> Report Disaster
               </Link>
@@ -62,6 +62,18 @@ export default function Sidebar({ activePage, isOpen, onClose }) {
               <span className="nav-icon"><FileText style={{ width: 16, height: 16 }} /></span> Decision Support
             </Link>
           </div>
+
+          {user && user.role === 'admin' && (
+            <div className="nav-section">
+              <div className="nav-section-title">Administration</div>
+              <Link to="/admin/dashboard" className={`nav-link ${activePage === 'admin_dashboard' ? 'active' : ''}`} onClick={onClose}>
+                <span className="nav-icon"><Settings style={{ width: 16, height: 16 }} /></span> Admin Dashboard
+              </Link>
+              <Link to="/admin/users" className={`nav-link ${activePage === 'users' ? 'active' : ''}`} onClick={onClose}>
+                <span className="nav-icon"><Users style={{ width: 16, height: 16 }} /></span> User Management
+              </Link>
+            </div>
+          )}
         </nav>
 
         <div className="sidebar-footer">

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useFlash } from '../context/FlashContext'
-import { Shield, Lock, Crown, Award, Users } from 'lucide-react'
+import { Shield, Lock } from 'lucide-react'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -17,18 +17,13 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const data = await login(username, password)
-      showFlash(`Welcome back, ${data.user.full_name}!`, 'success')
-      navigate('/dashboard')
+      showFlash(data.message || `Welcome back, ${data.user.full_name}!`, 'success')
+      navigate(data.user.role === 'admin' ? '/admin/dashboard' : '/dashboard')
     } catch (err) {
       showFlash(err.message || 'Invalid username or password.', 'error')
     } finally {
       setLoading(false)
     }
-  }
-
-  const fillLogin = (u, p) => {
-    setUsername(u)
-    setPassword(p)
   }
 
   return (
@@ -69,22 +64,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', marginBottom: '0.75rem' }}>
-              Demo Credentials
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-              <button className="btn btn-outline btn-sm" onClick={() => fillLogin('admin', 'admin123')} style={{ fontSize: '0.7rem' }}>
-                <Crown style={{ width: 12, height: 12, verticalAlign: 'middle', marginRight: '0.15rem', display: 'inline-block' }} /> Admin
-              </button>
-              <button className="btn btn-outline btn-sm" onClick={() => fillLogin('officer', 'officer123')} style={{ fontSize: '0.7rem' }}>
-                <Award style={{ width: 12, height: 12, verticalAlign: 'middle', marginRight: '0.15rem', display: 'inline-block' }} /> Officer
-              </button>
-              <button className="btn btn-outline btn-sm" onClick={() => fillLogin('ngo', 'ngo123')} style={{ fontSize: '0.7rem' }}>
-                <Users style={{ width: 12, height: 12, verticalAlign: 'middle', marginRight: '0.15rem', display: 'inline-block' }} /> NGO
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

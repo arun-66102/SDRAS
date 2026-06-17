@@ -7,6 +7,8 @@ import PredictionsPage from './pages/PredictionsPage'
 import AllocationsPage from './pages/AllocationsPage'
 import WarehousesPage from './pages/WarehousesPage'
 import ReportsPage from './pages/ReportsPage'
+import UserManagementPage from './pages/UserManagementPage'
+import AdminDashboardPage from './pages/AdminDashboardPage'
 import LoadingSpinner from './components/LoadingSpinner'
 
 function ProtectedRoute({ children, roles }) {
@@ -32,7 +34,8 @@ function ProtectedRoute({ children, roles }) {
 }
 
 export default function App() {
-  const { isAuthenticated, loading } = useAuth()
+  const { user, isAuthenticated, loading } = useAuth()
+  const homePath = user?.role === 'admin' ? '/admin/dashboard' : '/dashboard'
 
   if (loading) {
     return (
@@ -47,7 +50,7 @@ export default function App() {
       <Route
         path="/login"
         element={
-          isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
+          isAuthenticated ? <Navigate to={homePath} replace /> : <LoginPage />
         }
       />
       <Route
@@ -61,7 +64,7 @@ export default function App() {
       <Route
         path="/disaster/new"
         element={
-          <ProtectedRoute roles={['admin', 'officer']}>
+          <ProtectedRoute roles={['admin', 'officer', 'ngo']}>
             <DisasterFormPage />
           </ProtectedRoute>
         }
@@ -99,8 +102,24 @@ export default function App() {
         }
       />
       <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute roles={['admin']}>
+            <AdminDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <ProtectedRoute roles={['admin']}>
+            <UserManagementPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="*"
-        element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />}
+        element={<Navigate to={isAuthenticated ? homePath : "/login"} replace />}
       />
     </Routes>
   )

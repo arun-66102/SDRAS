@@ -12,6 +12,14 @@ from werkzeug.security import check_password_hash, generate_password_hash
 db = SQLAlchemy()
 
 
+# Junction table for many-to-many relationship between User and Warehouse
+user_warehouse = db.Table(
+    "user_warehouse",
+    db.Column("user_id", db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("warehouse_id", db.Integer, db.ForeignKey("warehouses.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # USER MODEL
 # ─────────────────────────────────────────────────────────────────────────────
@@ -26,6 +34,17 @@ class User(UserMixin, db.Model):
     # Roles: admin, officer, ngo
     full_name = db.Column(db.String(150), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    warehouses = db.relationship(
+        "Warehouse",
+        secondary=user_warehouse,
+        backref=db.backref("officers", lazy="dynamic"),
+        lazy="subquery"
+    )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -70,6 +89,9 @@ class Disaster(db.Model):
     # Relationships
     allocations = db.relationship("Allocation", backref="disaster", lazy=True)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __repr__(self):
         return f"<Disaster {self.id}: {self.disaster_type} @ {self.district}>"
 
@@ -102,6 +124,9 @@ class Warehouse(db.Model):
 
     # Relationships
     allocations = db.relationship("Allocation", backref="warehouse", lazy=True)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return f"<Warehouse {self.warehouse_id}: {self.warehouse_name}>"
@@ -136,6 +161,9 @@ class Allocation(db.Model):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def __repr__(self):
         return f"<Allocation {self.id}: Disaster#{self.disaster_id} ← WH#{self.warehouse_pk}>"
