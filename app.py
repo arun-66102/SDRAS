@@ -11,7 +11,7 @@ import os
 import sys
 
 from functools import wraps
-from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, jsonify, redirect, render_template, request, url_for, send_from_directory
 from flask_login import (
     LoginManager,
     current_user,
@@ -69,6 +69,16 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
+@login_manager.unauthorized_handler
+def unauthorized():
+    if request.path.startswith('/api/'):
+        return jsonify({"error": "Unauthorized"}), 401
+    # For SPA routes, let the serve catch-all handle it by serving index.html
+    from flask import send_from_directory
+    dist_dir = os.path.abspath(os.path.join(app.root_path, 'frontend', 'dist'))
+    return send_from_directory(dist_dir, 'index.html')
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # ML ENGINE — lazy loading
 # ─────────────────────────────────────────────────────────────────────────────
@@ -87,50 +97,69 @@ def get_ml_engine():
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ROUTES — Authentication (Module ①)
 # ═══════════════════════════════════════════════════════════════════════════
-@app.route("/")
-def index():
+# API — Authentication (Module ①)
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
-    return redirect(url_for("login"))
+        return jsonify({
+            "message": "Already authenticated",
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "full_name": current_user.full_name,
+                "role": current_user.role
+            }
+        })
+
+    data = request.get_json() or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+
+    user = User.query.filter_by(username=username).first()
+    if user and user.check_password(password):
+        login_user(user)
+        return jsonify({
+            "message": f"Welcome back, {user.full_name}!",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "role": user.role
+            }
+        })
+    else:
+        return jsonify({"error": "Invalid username or password."}), 401
 
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for("dashboard"))
-
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-
-        user = User.query.filter_by(username=username).first()
-        if user and user.check_password(password):
-            login_user(user)
-            flash(f"Welcome back, {user.full_name}!", "success")
-            next_page = request.args.get("next")
-            return redirect(next_page or url_for("dashboard"))
-        else:
-            flash("Invalid username or password.", "error")
-
-    return render_template("login.html")
-
-
-@app.route("/logout")
+@app.route("/api/auth/logout", methods=["POST"])
 @login_required
-def logout():
+def api_logout():
     logout_user()
-    flash("You have been logged out.", "info")
-    return redirect(url_for("login"))
+    return jsonify({"message": "You have been logged out.", "success": True})
+
+
+@app.route("/api/auth/me")
+def api_me():
+    if current_user.is_authenticated:
+        return jsonify({
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "full_name": current_user.full_name,
+                "role": current_user.role
+            }
+        })
+    return jsonify({"user": None}), 401
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ROUTE — Dashboard (Module ⑩)
+# API — Dashboard (Module ⑩)
 # ═══════════════════════════════════════════════════════════════════════════
-@app.route("/dashboard")
+@app.route("/api/dashboard")
 @login_required
-def dashboard():
+def api_dashboard():
     disasters = Disaster.query.order_by(Disaster.id.desc()).all()
     warehouses = Warehouse.query.all()
     allocations = Allocation.query.all()
@@ -176,152 +205,149 @@ def dashboard():
         },
     }
 
-    # JSON for map
-    disasters_json = json.dumps(
-        [
-            {
-                "id": d.id,
-                "disaster_type": d.disaster_type,
-                "severity": d.severity,
-                "population_affected": d.population_affected,
-                "district": d.district,
-                "state": d.state,
-                "latitude": d.latitude,
-                "longitude": d.longitude,
-                "status": d.status,
-            }
-            for d in disasters
-        ]
-    )
+    disasters_list = [
+        {
+            "id": d.id,
+            "disaster_type": d.disaster_type,
+            "severity": d.severity,
+            "population_affected": d.population_affected,
+            "district": d.district,
+            "state": d.state,
+            "latitude": d.latitude,
+            "longitude": d.longitude,
+            "status": d.status,
+            "food_required": d.food_required,
+            "medical_required": d.medical_required,
+            "water_required": d.water_required,
+            "clothing_required": d.clothing_required,
+            "has_allocations": len(d.allocations) > 0,
+        }
+        for d in disasters
+    ]
 
-    warehouses_json = json.dumps(
-        [
-            {
-                "warehouse_id": w.warehouse_id,
-                "warehouse_name": w.warehouse_name,
-                "district": w.district,
-                "state": w.state,
-                "latitude": w.latitude,
-                "longitude": w.longitude,
-                "food_stock": w.food_stock,
-                "medical_stock": w.medical_stock,
-                "water_stock": w.water_stock,
-                "clothing_stock": w.clothing_stock,
-            }
-            for w in warehouses
-        ]
-    )
+    warehouses_list = [
+        {
+            "warehouse_id": w.warehouse_id,
+            "warehouse_name": w.warehouse_name,
+            "district": w.district,
+            "state": w.state,
+            "latitude": w.latitude,
+            "longitude": w.longitude,
+            "food_stock": w.food_stock,
+            "medical_stock": w.medical_stock,
+            "water_stock": w.water_stock,
+            "clothing_stock": w.clothing_stock,
+        }
+        for w in warehouses
+    ]
 
-    recent_disasters = disasters[:20]
-
-    return render_template(
-        "dashboard.html",
-        active_page="dashboard",
-        stats=stats,
-        chart_data=json.dumps(chart_data),
-        disasters_json=disasters_json,
-        warehouses_json=warehouses_json,
-        recent_disasters=recent_disasters,
-    )
+    return jsonify({
+        "stats": stats,
+        "chart_data": chart_data,
+        "disasters": disasters_list,
+        "recent_disasters": disasters_list[:20],
+        "warehouses": warehouses_list,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# ROUTE — Disaster Input (Module ②) + Prediction (Module ⑤)
+# API — Disaster Input (Module ②) + Prediction (Module ⑤)
 # ═══════════════════════════════════════════════════════════════════════════
-@app.route("/disaster/new", methods=["GET", "POST"])
+@app.route("/api/disaster/form-data")
 @login_required
 @role_required("admin", "officer")
-def disaster_form():
-    if request.method == "POST":
-        try:
-            disaster_type = request.form["disaster_type"]
-            severity = int(request.form["severity"])
-            population_affected = int(request.form["population_affected"])
-            temperature_c = float(request.form["temperature_c"])
-            duration = int(request.form["disaster_duration_days"])
-            district = request.form["district"]
-            state = request.form["state"]
-            latitude = float(request.form["latitude"])
-            longitude = float(request.form["longitude"])
-
-            # Rainfall: required only for weather-related disasters
-            if disaster_type in Config.RAINFALL_REQUIRED_DISASTERS:
-                rainfall_mm = float(request.form["rainfall_mm"])
-            else:
-                rainfall_raw = request.form.get("rainfall_mm", "").strip()
-                rainfall_mm = float(rainfall_raw) if rainfall_raw else 0.0
-
-            # Run ML prediction
-            engine = get_ml_engine()
-            predictions = engine.predict(
-                disaster_type, severity, population_affected,
-                rainfall_mm, temperature_c, duration
-            )
-
-            # Use best model's predictions
-            best_model = engine.get_best_model("food_required")
-            best_preds = predictions.get(best_model, list(predictions.values())[0])
-
-            # Save disaster
-            disaster = Disaster(
-                disaster_type=disaster_type,
-                severity=severity,
-                population_affected=population_affected,
-                rainfall_mm=rainfall_mm,
-                temperature_c=temperature_c,
-                disaster_duration_days=duration,
-                district=district,
-                state=state,
-                latitude=latitude,
-                longitude=longitude,
-                food_required=best_preds["food_required"],
-                medical_required=best_preds["medical_required"],
-                water_required=best_preds["water_required"],
-                clothing_required=best_preds["clothing_required"],
-                status="Active",
-                created_by=current_user.id,
-            )
-            db.session.add(disaster)
-            db.session.commit()
-
-            flash(
-                f"Disaster #{disaster.id} reported! Predicted — "
-                f"Food: {best_preds['food_required']:,}, "
-                f"Medical: {best_preds['medical_required']:,}, "
-                f"Water: {best_preds['water_required']:,}, "
-                f"Clothing: {best_preds['clothing_required']:,}",
-                "success",
-            )
-            return redirect(url_for("dashboard"))
-
-        except Exception as e:
-            db.session.rollback()
-            flash(f"Error: {str(e)}", "error")
-
-    return render_template(
-        "disaster_form.html",
-        active_page="disaster_form",
-        disaster_types=Config.DISASTER_TYPES,
-        districts=Config.DISTRICTS,
-        rainfall_required_disasters=json.dumps(Config.RAINFALL_REQUIRED_DISASTERS),
-    )
+def api_disaster_form_data():
+    return jsonify({
+        "disaster_types": Config.DISASTER_TYPES,
+        "districts": Config.DISTRICTS,
+        "rainfall_required_disasters": Config.RAINFALL_REQUIRED_DISASTERS,
+    })
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# ROUTE — Predictions Page (Module ④)
-# ═══════════════════════════════════════════════════════════════════════════
-@app.route("/predictions")
+@app.route("/api/disaster/new", methods=["POST"])
 @login_required
-def predictions_page():
+@role_required("admin", "officer")
+def api_disaster_new():
+    try:
+        data = request.get_json() or {}
+        disaster_type = data["disaster_type"]
+        severity = int(data["severity"])
+        population_affected = int(data["population_affected"])
+        temperature_c = float(data["temperature_c"])
+        duration = int(data["disaster_duration_days"])
+        district = data["district"]
+        state = data["state"]
+        latitude = float(data["latitude"])
+        longitude = float(data["longitude"])
+
+        # Rainfall: required only for weather-related disasters
+        if disaster_type in Config.RAINFALL_REQUIRED_DISASTERS:
+            rainfall_mm = float(data["rainfall_mm"])
+        else:
+            rainfall_raw = str(data.get("rainfall_mm", "")).strip()
+            rainfall_mm = float(rainfall_raw) if rainfall_raw else 0.0
+
+        # Run ML prediction
+        engine = get_ml_engine()
+        predictions = engine.predict(
+            disaster_type, severity, population_affected,
+            rainfall_mm, temperature_c, duration
+        )
+
+        # Use best model's predictions
+        best_model = engine.get_best_model("food_required")
+        best_preds = predictions.get(best_model, list(predictions.values())[0])
+
+        # Save disaster
+        disaster = Disaster(
+            disaster_type=disaster_type,
+            severity=severity,
+            population_affected=population_affected,
+            rainfall_mm=rainfall_mm,
+            temperature_c=temperature_c,
+            disaster_duration_days=duration,
+            district=district,
+            state=state,
+            latitude=latitude,
+            longitude=longitude,
+            food_required=int(best_preds["food_required"]),
+            medical_required=int(best_preds["medical_required"]),
+            water_required=int(best_preds["water_required"]),
+            clothing_required=int(best_preds["clothing_required"]),
+            status="Active",
+            created_by=current_user.id,
+        )
+        db.session.add(disaster)
+        db.session.commit()
+
+        return jsonify({
+            "message": (
+                f"Disaster #{disaster.id} reported! Predicted — "
+                f"Food: {disaster.food_required:,}, "
+                f"Medical: {disaster.medical_required:,}, "
+                f"Water: {disaster.water_required:,}, "
+                f"Clothing: {disaster.clothing_required:,}"
+            ),
+            "disaster_id": disaster.id
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API — Predictions Page (Module ④)
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route("/api/predictions")
+@login_required
+def api_predictions():
     engine = get_ml_engine()
     metrics = engine.get_all_metrics()
-
-    return render_template(
-        "predictions.html",
-        active_page="predictions",
-        metrics=metrics,
-        disaster_types=Config.DISASTER_TYPES,
-    )
+    return jsonify({
+        "metrics": metrics,
+        "disaster_types": Config.DISASTER_TYPES,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -360,9 +386,9 @@ def api_predict():
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTE — Allocations (Module ⑧ + ⑨)
 # ═══════════════════════════════════════════════════════════════════════════
-@app.route("/allocations")
+@app.route("/api/allocations")
 @login_required
-def allocations_page():
+def api_allocations():
     allocations = Allocation.query.order_by(Allocation.id.desc()).all()
 
     unique_disaster_ids = list(set(a.disaster_id for a in allocations))
@@ -378,12 +404,34 @@ def allocations_page():
         "pending": sum(1 for status in disaster_statuses.values() if status == "Pending"),
     }
 
-    return render_template(
-        "allocations.html",
-        active_page="allocations",
-        allocations=allocations,
-        stats=stats,
-    )
+    allocations_list = [
+        {
+            "id": a.id,
+            "disaster_id": a.disaster_id,
+            "disaster": {
+                "disaster_type": a.disaster.disaster_type,
+                "district": a.disaster.district,
+            } if a.disaster else None,
+            "warehouse": {
+                "warehouse_id": a.warehouse.warehouse_id,
+                "district": a.warehouse.district,
+            } if a.warehouse else None,
+            "distance_km": a.distance_km,
+            "food_allocated": a.food_allocated,
+            "medical_allocated": a.medical_allocated,
+            "water_allocated": a.water_allocated,
+            "clothing_allocated": a.clothing_allocated,
+            "priority": a.priority,
+            "status": a.status,
+            "created_at": a.created_at.strftime("%Y-%m-%d %H:%M:%S") if a.created_at else None,
+        }
+        for a in allocations
+    ]
+
+    return jsonify({
+        "allocations": allocations_list,
+        "stats": stats,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -488,9 +536,9 @@ def api_allocate():
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTE — Warehouses (Module ⑥)
 # ═══════════════════════════════════════════════════════════════════════════
-@app.route("/warehouses")
+@app.route("/api/warehouses")
 @login_required
-def warehouses_page():
+def api_warehouses():
     warehouses = Warehouse.query.all()
 
     total_food = sum(w.food_stock for w in warehouses)
@@ -498,37 +546,35 @@ def warehouses_page():
     total_water = sum(w.water_stock for w in warehouses)
     total_clothing = sum(w.clothing_stock for w in warehouses)
 
-    warehouses_json = json.dumps(
-        [
-            {
-                "warehouse_id": w.warehouse_id,
-                "warehouse_name": w.warehouse_name,
-                "district": w.district,
-                "state": w.state,
-                "latitude": w.latitude,
-                "longitude": w.longitude,
-                "food_stock": w.food_stock,
-                "medical_stock": w.medical_stock,
-                "water_stock": w.water_stock,
-                "clothing_stock": w.clothing_stock,
-            }
-            for w in warehouses
-        ]
-    )
+    warehouses_list = [
+        {
+            "id": w.id,
+            "warehouse_id": w.warehouse_id,
+            "warehouse_name": w.warehouse_name,
+            "district": w.district,
+            "state": w.state,
+            "latitude": w.latitude,
+            "longitude": w.longitude,
+            "food_stock": w.food_stock,
+            "medical_stock": w.medical_stock,
+            "water_stock": w.water_stock,
+            "clothing_stock": w.clothing_stock,
+            "min_food_threshold": w.min_food_threshold,
+            "min_medical_threshold": w.min_medical_threshold,
+            "min_water_threshold": w.min_water_threshold,
+            "min_clothing_threshold": w.min_clothing_threshold,
+        }
+        for w in warehouses
+    ]
 
-    districts_json = json.dumps(Config.DISTRICTS)
-
-    return render_template(
-        "warehouses.html",
-        active_page="warehouses",
-        warehouses=warehouses,
-        total_food=total_food,
-        total_medical=total_medical,
-        total_water=total_water,
-        total_clothing=total_clothing,
-        warehouses_json=warehouses_json,
-        districts_json=districts_json,
-    )
+    return jsonify({
+        "warehouses": warehouses_list,
+        "total_food": total_food,
+        "total_medical": total_medical,
+        "total_water": total_water,
+        "total_clothing": total_clothing,
+        "districts": Config.DISTRICTS,
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -720,9 +766,9 @@ def api_create_warehouse():
 # ═══════════════════════════════════════════════════════════════════════════
 # ROUTE — Decision Support / Reports (Module ⑪)
 # ═══════════════════════════════════════════════════════════════════════════
-@app.route("/reports")
+@app.route("/api/reports")
 @login_required
-def reports_page():
+def api_reports():
     from decision_support import (
         generate_emergency_alerts,
         generate_recommendations,
@@ -739,8 +785,17 @@ def reports_page():
     alerts = []
     recommendations = []
     relief_plan = []
+    active_disaster_data = None
 
     if active_disaster:
+        active_disaster_data = {
+            "id": active_disaster.id,
+            "disaster_type": active_disaster.disaster_type,
+            "severity": active_disaster.severity,
+            "district": active_disaster.district,
+            "state": active_disaster.state,
+        }
+
         alerts = generate_emergency_alerts(
             {
                 "severity": active_disaster.severity,
@@ -788,14 +843,26 @@ def reports_page():
             predicted_needs,
         )
 
-    return render_template(
-        "reports.html",
-        active_page="reports",
-        alerts=alerts,
-        recommendations=recommendations,
-        relief_plan=relief_plan,
-        active_disaster=active_disaster,
-    )
+    return jsonify({
+        "alerts": alerts,
+        "recommendations": recommendations,
+        "relief_plan": relief_plan,
+        "active_disaster": active_disaster_data,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SPA FALLBACK
+# ═══════════════════════════════════════════════════════════════════════════
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path.startswith("api/") or path == "api":
+        abort(404)
+    dist_dir = os.path.abspath(os.path.join(app.root_path, 'frontend', 'dist'))
+    if path and os.path.exists(os.path.join(dist_dir, path)):
+        return send_from_directory(dist_dir, path)
+    return send_from_directory(dist_dir, 'index.html')
 
 
 # ═══════════════════════════════════════════════════════════════════════════
