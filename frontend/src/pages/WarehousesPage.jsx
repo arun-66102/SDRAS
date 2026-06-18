@@ -15,7 +15,7 @@ import L from 'leaflet'
 
 const warehouseIcon = L.divIcon({
   className: 'custom-warehouse-icon',
-  html: '<div style="background:#3b82f6;width:12px;height:12px;border-radius:3px;border:2px solid #fff;box-shadow:0 0 6px rgba(59,130,246,0.5)"></div>',
+  html: '<div style="background:#f48296;width:12px;height:12px;border-radius:3px;border:2px solid #fff;box-shadow:0 0 6px rgba(244,130,150,0.5)"></div>',
   iconSize: [12, 12],
   iconAnchor: [6, 6],
 })

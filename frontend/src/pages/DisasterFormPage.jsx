@@ -250,9 +250,9 @@ export default function DisasterFormPage() {
             <div className="card-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {[
-                  { name: 'XGBoost Regressor', desc: 'Gradient Boosting — Primary Model', color: '#3b82f6' },
-                  { name: 'Random Forest', desc: 'Ensemble Trees — Robust Performance', color: '#10b981' },
-                  { name: 'Linear Regression', desc: 'Baseline Model — Interpretable', color: '#f59e0b' },
+                  { name: 'XGBoost Regressor', desc: 'Gradient Boosting — Primary Model', color: '#f48296' },
+                  { name: 'Random Forest', desc: 'Ensemble Trees — Robust Performance', color: '#88b293' },
+                  { name: 'Linear Regression', desc: 'Baseline Model — Interpretable', color: '#f4b393' },
                 ].map(m => (
                   <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)' }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: m.color, flexShrink: 0 }}></div>

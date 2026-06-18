@@ -23,23 +23,23 @@ import { Doughnut, Bar } from 'react-chartjs-2'
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 // Chart defaults
-ChartJS.defaults.color = '#94a3b8'
-ChartJS.defaults.borderColor = 'rgba(255,255,255,0.06)'
+ChartJS.defaults.color = '#5c4c4c'
+ChartJS.defaults.borderColor = 'rgba(61,46,46,0.06)'
 ChartJS.defaults.font.family = "'Inter', sans-serif"
 ChartJS.defaults.font.size = 12
 
 const warehouseIcon = L.divIcon({
   className: 'custom-warehouse-icon',
-  html: '<div style="background:#3b82f6;width:12px;height:12px;border-radius:3px;border:2px solid #fff;box-shadow:0 0 6px rgba(59,130,246,0.5)"></div>',
+  html: '<div style="background:#f48296;width:12px;height:12px;border-radius:3px;border:2px solid #fff;box-shadow:0 0 6px rgba(244,130,150,0.5)"></div>',
   iconSize: [12, 12],
   iconAnchor: [6, 6],
 })
 
 function getSeverityColor(sev) {
-  if (sev >= 8) return '#f43f5e'
-  if (sev >= 6) return '#f97316'
-  if (sev >= 4) return '#f59e0b'
-  return '#10b981'
+  if (sev >= 8) return '#e56b8f' // deep rose pink
+  if (sev >= 6) return '#f4a261' // peach / soft orange
+  if (sev >= 4) return '#e9c46a' // pastel yellow
+  return '#88b293' // pale green
 }
 
 function getDisasterBadgeClass(type) {
@@ -161,7 +161,7 @@ export default function DashboardPage() {
                     labels: chart_data.type_distribution.labels,
                     datasets: [{
                       data: chart_data.type_distribution.values,
-                      backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#06b6d4'],
+                      backgroundColor: ['#f48296', '#88b293', '#f4b393', '#e56b8f', '#ff9eaf', '#7bb2e8'],
                       borderWidth: 0,
                       hoverOffset: 8,
                     }],
@@ -193,8 +193,8 @@ export default function DashboardPage() {
                       {
                         label: 'Predicted Demand',
                         data: [chart_data.resource_totals.food, chart_data.resource_totals.medical, chart_data.resource_totals.water || 0, chart_data.resource_totals.clothing || 0],
-                        backgroundColor: 'rgba(59, 130, 246, 0.45)',
-                        borderColor: '#3b82f6', borderWidth: 2, borderRadius: 6,
+                        backgroundColor: 'rgba(244, 130, 150, 0.45)',
+                        borderColor: '#f48296', borderWidth: 2, borderRadius: 6,
                       },
                       {
                         label: 'Allocated Resources',
@@ -202,8 +202,8 @@ export default function DashboardPage() {
                           chart_data.resource_allocated?.food || 0, chart_data.resource_allocated?.medical || 0,
                           chart_data.resource_allocated?.water || 0, chart_data.resource_allocated?.clothing || 0,
                         ],
-                        backgroundColor: 'rgba(16, 185, 129, 0.45)',
-                        borderColor: '#10b981', borderWidth: 2, borderRadius: 6,
+                        backgroundColor: 'rgba(136, 178, 147, 0.45)',
+                        borderColor: '#88b293', borderWidth: 2, borderRadius: 6,
                       },
                     ],
                   }}
@@ -235,10 +235,10 @@ export default function DashboardPage() {
                       label: 'Disasters',
                       data: chart_data.severity_distribution.values,
                       backgroundColor: chart_data.severity_distribution.labels.map(s => {
-                        if (s >= 8) return '#f43f5e99'
-                        if (s >= 6) return '#f9731699'
-                        if (s >= 4) return '#f59e0b99'
-                        return '#10b98199'
+                        if (s >= 8) return '#e56b8f99'
+                        if (s >= 6) return '#f4a26199'
+                        if (s >= 4) return '#e9c46a99'
+                        return '#88b29399'
                       }),
                       borderRadius: 4,
                     }],

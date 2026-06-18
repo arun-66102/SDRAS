@@ -25,7 +25,7 @@ const MODELS = [
   { key: 'linear_regression', label: 'Linear Regression' },
 ]
 
-const MODEL_COLORS = { xgboost: '#3b82f6', random_forest: '#10b981', linear_regression: '#f59e0b' }
+const MODEL_COLORS = { xgboost: '#f48296', random_forest: '#88b293', linear_regression: '#f4b393' }
 
 export default function PredictionsPage() {
   const [data, setData] = useState(null)
@@ -258,7 +258,7 @@ export default function PredictionsPage() {
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { position: 'top', labels: { usePointStyle: true } } },
                     scales: {
-                      y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { callback: v => formatNumber(v) } },
+                      y: { beginAtZero: true, grid: { color: 'rgba(61, 46, 46, 0.06)' }, ticks: { callback: v => formatNumber(v) } },
                       x: { grid: { display: false } },
                     },
                   }}
